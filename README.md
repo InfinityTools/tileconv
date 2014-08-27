@@ -1,3 +1,5 @@
+# TILECONV
+
 This tool allows you to compress or decompress TIS and MOS files provided by Infinity Engine games such as Baldur's Gate or Icewind Dale.
 The tool uses modern compression algorithms to achieve great compression ratios without noticeable degradation in quality.
 
