@@ -642,7 +642,7 @@ bool Graphics::encodeTile(TileDataPtr tileData) noexcept
     uint32_t tileWidthPadded;       // tile width expanded to a multiple of 4
     uint32_t tileHeightPadded;      // tile height expanded to a multiple of 4
     uint32_t tileSizeEncoded;       // pixel encoded size of the tile
-    int      squishFlags = squish::kColourIterativeClusterFit | squish::kColourMetricPerceptual;
+    int      squishFlags = squish::kColourIterativeClusterFit;
     Colors   colors(getOptions());
     Compression compression;
 
