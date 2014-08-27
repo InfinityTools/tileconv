@@ -1,0 +1,6 @@
+# Eclipse specific
+.cproject
+.project
+/Debug
+/Release
+/.settings
