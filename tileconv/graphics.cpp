@@ -125,7 +125,7 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
           // encoding tile
           if (!encodeTile(tileData)) {
             if (!tileData->errorMsg.empty()) {
-              std::printf(tileData->errorMsg.c_str());
+              std::printf("%s", tileData->errorMsg.c_str());
             }
             return false;
           }
@@ -214,7 +214,7 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
 
           if (!decodeTile(tileData)) {
             if (!tileData->errorMsg.empty()) {
-              std::printf(tileData->errorMsg.c_str());
+              std::printf("%s", tileData->errorMsg.c_str());
             }
             return false;
           }
@@ -376,7 +376,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
 
             if (!encodeTile(tileData)) {
               if (!tileData->errorMsg.empty()) {
-                std::printf(tileData->errorMsg.c_str());
+                std::printf("%s", tileData->errorMsg.c_str());
               }
               return false;
             }
@@ -496,7 +496,7 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
 
             if (!decodeTile(tileData)) {
               if (!tileData->errorMsg.empty()) {
-                std::printf(tileData->errorMsg.c_str());
+                std::printf("%s", tileData->errorMsg.c_str());
               }
               return false;
             }
@@ -568,7 +568,7 @@ bool Graphics::writeEncodedTile(TileDataPtr tileData, File &file, double &ratio)
       }
       return true;
     } else {
-      std::printf(tileData->errorMsg.c_str());
+      std::printf("%s", tileData->errorMsg.c_str());
     }
   }
   return false;
@@ -593,7 +593,7 @@ bool Graphics::writeDecodedTisTile(TileDataPtr tileData, File &file) noexcept
       }
       return true;
     } else {
-      std::printf(tileData->errorMsg.c_str());
+      std::printf("%s", tileData->errorMsg.c_str());
     }
   }
   return false;
@@ -625,7 +625,7 @@ bool Graphics::writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32
       }
       return true;
     } else {
-      std::printf(tileData->errorMsg.c_str());
+      std::printf("%s", tileData->errorMsg.c_str());
     }
   }
   return false;

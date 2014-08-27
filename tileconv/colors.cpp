@@ -37,7 +37,7 @@ Colors::~Colors() noexcept
 
 uint32_t Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_t size) noexcept
 {
-  if (src != 0 && palette != 0 && dst != 0 && size > 0) {
+  if (src != nullptr && palette != nullptr && dst != nullptr && size > 0) {
     for (uint32_t i = 0; i < size; i++, src++, dst += 4) {
       uint32_t ofs = (uint32_t)src[0] << 2;
       if (src[0] || get32u((uint32_t*)palette) != 0x0000ff00) {
@@ -57,7 +57,7 @@ uint32_t Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_
 uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
                            uint32_t width, uint32_t height) noexcept
 {
-  if (src != 0 && dst != 0 && palette != 0 && width > 0 && height > 0) {
+  if (src != nullptr && dst != nullptr && palette != nullptr && width > 0 && height > 0) {
     uint32_t size = width*height;
 
     // preparing source pixels
@@ -98,7 +98,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
 uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
                           unsigned newWidth, unsigned newHeight) noexcept
 {
-  if (src != 0 && dst != 0 && width > 0 && height > 0 && newWidth >= width &&
+  if (src != nullptr && dst != nullptr && width > 0 && height > 0 && newWidth >= width &&
       newHeight >= height && (newWidth & 3) == 0 && (newHeight & 3) == 0) {
 
     for (unsigned y = 0; y < height; y++) {
@@ -112,7 +112,7 @@ uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned h
     }
 
     // padding vertically with previously used values
-    unsigned shift = -(newWidth * 4);  // offset into previous line
+    int shift = -(newWidth * 4);  // offset into previous line
     for (unsigned y = height; y < newHeight; y++) {
       for (unsigned x = 0; x < newWidth; x++, dst += 4) {
         dst[0] = dst[shift+0]; dst[1] = dst[shift+1]; dst[2] = dst[shift+2]; dst[3] = dst[shift+3];
@@ -128,7 +128,7 @@ uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned h
 uint32_t Colors::unpadBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
                             unsigned newWidth, unsigned newHeight) noexcept
 {
-  if (src != 0 && dst != 0 && width > 0 && height > 0 &&
+  if (src != nullptr && dst != nullptr && width > 0 && height > 0 &&
       newWidth > 0 && newHeight > 0 &&
       newWidth <= width && newHeight <= height &&
       (width & 3) == 0 && (height & 3) == 0) {

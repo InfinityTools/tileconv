@@ -51,7 +51,7 @@ Compression::~Compression() noexcept
 
 uint32_t Compression::deflate(uint8_t *src, uint32_t srcSize, uint8_t *dst, uint32_t dstSize) noexcept
 {
-  if (m_defResult && src != 0 && dst != 0 && srcSize > 0 && dstSize > 0) {
+  if (m_defResult && src != nullptr && dst != nullptr && srcSize > 0 && dstSize > 0) {
     m_defStream.avail_in = srcSize;
     m_defStream.next_in = src;
     m_defStream.avail_out = dstSize;
@@ -66,7 +66,7 @@ uint32_t Compression::deflate(uint8_t *src, uint32_t srcSize, uint8_t *dst, uint
 
 uint32_t Compression::inflate(uint8_t *src, uint32_t srcSize, uint8_t *dst, uint32_t dstSize) noexcept
 {
-  if (m_infResult && src != 0 && dst != 0 && srcSize > 0&& dstSize > 0) {
+  if (m_infResult && src != nullptr && dst != nullptr && srcSize > 0&& dstSize > 0) {
     m_infStream.avail_in = srcSize;
     m_infStream.next_in = src;
     m_infStream.avail_out = dstSize;

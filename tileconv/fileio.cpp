@@ -27,7 +27,7 @@ File::File(const char *fileName, const char *mode) noexcept
 , m_buffer(0)
 {
   m_file = std::fopen(fileName, mode);
-  if (m_file != 0) {
+  if (m_file != nullptr) {
     m_mode.assign(mode);
   }
 }
@@ -38,7 +38,7 @@ File::File(const char *fileName, const char *mode, int bufferSize) noexcept
 , m_buffer(0)
 {
   m_file = std::fopen(fileName, mode);
-  if (m_file != 0) {
+  if (m_file != nullptr) {
     if (mode) m_mode.assign(mode);
     if (bufferSize < 0) bufferSize = 0;
     if (bufferSize > 0) m_buffer = new char[bufferSize];
@@ -48,14 +48,14 @@ File::File(const char *fileName, const char *mode, int bufferSize) noexcept
 
 File::~File() noexcept
 {
-  if (m_file != 0) {
+  if (m_file != nullptr) {
     flush();
     std::fclose(m_file);
-    m_file = 0;
+    m_file = nullptr;
   }
-  if (m_buffer != 0) {
+  if (m_buffer != nullptr) {
     delete[] m_buffer;
-    m_buffer = 0;
+    m_buffer = nullptr;
   }
 }
 
