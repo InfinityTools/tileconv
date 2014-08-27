@@ -7,6 +7,8 @@ This tool allows you to compress or decompress TIS and MOS files provided by
 Infinity Engine games such as Baldur's Gate or Icewind Dale.
 The tool uses modern compression algorithms to achieve great compression ratios 
 without noticeable degradation in quality.
+
+Supported conversions:
 * TIS files will be automatically compressed into the TBC format.
 * TBC files will be automatically decompressed into the TIS format.
 * MOS files will be automatically compressed into the MBC format.
@@ -74,5 +76,5 @@ at http://www.shsforums.net/ or contact me by private message on the same forum.
 Version history
 ---------------
 
-v0.1: 2014-08-27
-- Initial release
+v0.1 (2014-08-27)
+  * Initial release

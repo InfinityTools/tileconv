@@ -34,7 +34,7 @@ Options::Options() noexcept
 : m_haltOnError(true)
 , m_silent(1)
 , m_mosc(false)
-, m_dithering(true)
+, m_dithering(false)
 , m_deflate(true)
 , m_encoding(Encoding::BC1)
 , m_inFiles()
@@ -249,10 +249,10 @@ void Options::setSilence(int level) noexcept
 }
 
 
-void Options::setThreads(int v) noexcept
-{
-  m_threads = std::max(0, std::min(MAX_THREADS, v));
-}
+//void Options::setThreads(int v) noexcept
+//{
+//  m_threads = std::max(0, std::min(MAX_THREADS, v));
+//}
 
 
 // ----------------------- STATIC METHODS -----------------------

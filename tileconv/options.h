@@ -97,8 +97,8 @@ public:
   bool isDeflate() const noexcept { return m_deflate; }
 
   /** Number of threads to use for encoding/decoding. (0=autodetect) */
-  void setThreads(int v) noexcept;
-  int getThreads() const noexcept { return m_threads; }
+//  void setThreads(int v) noexcept;
+//  int getThreads() const noexcept { return m_threads; }
 
   /** Specify encoding type. Default: BC1 */
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
@@ -114,7 +114,7 @@ private:
   bool                      m_mosc;         // create MOSC output
   bool                      m_dithering;    // apply color dithering to TIS/MOS output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
-  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
+//  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
   Encoding                  m_encoding;     // encoding type
   std::vector<std::string>  m_inFiles;
   std::string               m_outFile;
