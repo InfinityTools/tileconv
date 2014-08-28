@@ -67,26 +67,48 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
 
       // parsing TIS header
       if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_TIS_SIGNATURE, 4) != 0) return false;
+      if (std::strncmp(sig, HEADER_TIS_SIGNATURE, 4) != 0) {
+        std::printf("Invalid TIS signature\n");
+        return false;
+      }
 
       if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) return false;
+      if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
+        std::printf("Invalid TIS version\n");
+        return false;
+      }
 
       if (fin.read(&tileCount, 4, 1) != 1) return false;
       tileCount = get32u(&tileCount);
-      if (tileCount == 0) return false;
+      if (tileCount == 0) {
+        std::printf("No tiles found\n");
+        return false;
+      }
 
       if (fin.read(&tileSize, 4, 1) != 1) return false;
       tileSize = get32u(&tileSize);
-      if (tileSize != 0x1400) return false;
+      if (tileSize != 0x1400) {
+        if (tileSize == 0x000c) {
+          std::printf("PVRZ-based TIS files are not supported\n");
+        } else {
+          std::printf("Invalid tile size\n");
+        }
+        return false;
+      }
 
       if (fin.read(&headerSize, 4, 1) != 1) return false;
       headerSize = get32u(&headerSize);
-      if (headerSize != 0x18) return false;
+      if (headerSize < 0x18) {
+        std::printf("Invalid header size\n");
+        return false;
+      }
 
       if (fin.read(&tileDim, 4, 1) != 1) return false;
       tileDim = get32u(&tileDim);
-      if (tileDim != 0x40) return false;
+      if (tileDim != 0x40) {
+        std::printf("Invalid tile dimensions\n");
+        return false;
+      }
 
       File fout(outFile.c_str(), "wb");
       if (!fout.error()) {
@@ -164,17 +186,25 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
 
       // parsing TBC header
       if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_TBC_SIGNATURE, 4) != 0) return false;
+      if (std::strncmp(sig, HEADER_TBC_SIGNATURE, 4) != 0) {
+        std::printf("Invalid TBC signature\n");
+        return false;
+      }
 
       if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) return false;
+      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0)
+        std::printf("Unsupported TBC version\n");
+        return false;
 
       if (fin.read(&compType, 4, 1) != 1) return false;
       compType = get32u(&compType);
 
       if (fin.read(&tileCount, 4, 1) != 1) return false;
       tileCount = get32u(&tileCount);
-      if (tileCount == 0) return false;
+      if (tileCount == 0) {
+        std::printf("No tiles found\n");
+        return false;
+      }
 
       File fout(outFile.c_str(), "wb");
       if (!fout.error()) {
@@ -205,7 +235,10 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
           uint32_t chunkSize;
           if (fin.read(&chunkSize, 4, 1) != 1) return false;
           chunkSize = get32u(&chunkSize);
-          if (chunkSize == 0) return false;
+          if (chunkSize == 0) {
+            std::printf("Invalid block size found for tile #%d\n", tileIdx);
+            return false;
+          }
           TileDataPtr tileData(new TileData(tileIdx, ptrIndexed, ptrPalette, ptrDeflated,
                                             0, 0, compType, chunkSize));
           if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {
@@ -258,18 +291,30 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         // getting MOSC file size
         fin.seek(0, SEEK_END);
         moscSize = fin.tell();
-        if (moscSize <= 12) return false;
+        if (moscSize <= 12) {
+          std::printf("Invalid MOSC size\n");
+          return false;
+        }
         moscSize -= 12;    // removing header size
 
         fin.seek(4, SEEK_SET);
         if (fin.read(&ver, 1, 4) != 4) return false;
-        if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) return false;
+        if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
+          std::printf("Invalid MOSC version\n");
+          return false;
+        }
 
         if (fin.read(&mosSize, 4, 1) != 1) return false;;
         mosSize = get32u(&mosSize);
-        if (mosSize < 24) return false;
+        if (mosSize < 24) {
+          std::printf("MOS size too small\n");
+          return false;
+        }
         BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
-        if (fin.read(moscData.get(), 1, moscSize) < moscSize) return false;
+        if (fin.read(moscData.get(), 1, moscSize) < moscSize) {
+          std::printf("Incomplete or corrupted MOSC file\n");
+          return false;
+        }
 
         mosData.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
         uint32_t size = compression.inflate(moscData.get(), moscSize, mosData.get(), mosSize);
@@ -280,51 +325,82 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
       } else if (std::strncmp(sig, HEADER_MOS_SIGNATURE, 4) == 0) {   // loading MOS data
         fin.seek(0, SEEK_END);
         mosSize = fin.tell();
-        if (mosSize < 24) return false;
+        if (mosSize < 24) {
+          std::printf("MOS size too small\n");
+          return false;
+        }
         fin.seek(0, SEEK_SET);
         mosData.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
         if (fin.read(mosData.get(), 1, mosSize) != mosSize) return false;
       } else {
+        std::printf("Invalid MOS signature\n");
         return false;
       }
 
       // parsing MOS header
       uint32_t inOfs = 0;
-      if (std::memcmp(mosData.get()+inOfs, HEADER_MOS_SIGNATURE, 4) != 0) return false;
+      if (std::memcmp(mosData.get()+inOfs, HEADER_MOS_SIGNATURE, 4) != 0) {
+        std::printf("Invalid MOS signature\n");
+        return false;
+      }
       inOfs += 4;
 
-      if (std::memcmp(mosData.get()+inOfs, HEADER_VERSION_V1, 4) != 0) return false;
+      if (std::memcmp(mosData.get()+inOfs, HEADER_VERSION_V1, 4) != 0) {
+        std::printf("Unsupported MOS version\n");
+        return false;
+      }
       inOfs += 4;
 
       std::memcpy(&mosWidth, mosData.get()+inOfs, 2);
       mosWidth = get16u(&mosWidth);
-      if (mosWidth == 0) return false;
+      if (mosWidth == 0) {
+        std::printf("Invalid MOS width\n");
+        return false;
+      }
       inOfs += 2;
 
       mosHeight = get16u((uint16_t*)(mosData.get()+inOfs));
-      if (mosHeight == 0) return false;
+      if (mosHeight == 0) {
+        std::printf("Invalid MOS height\n");
+        return false;
+      }
       inOfs += 2;
 
       mosCols = get16u((uint16_t*)(mosData.get()+inOfs));
-      if (mosCols == 0) return false;
+      if (mosCols == 0) {
+        std::printf("Invalid number of tiles\n");
+        return false;
+      }
       inOfs += 2;
 
       mosRows = get16u((uint16_t*)(mosData.get()+inOfs));
-      if (mosRows == 0) return false;
+      if (mosRows == 0) {
+        std::printf("Invalid number of tiles\n");
+        return false;
+      }
       inOfs += 2;
 
       tileDim = get32u((uint32_t*)(mosData.get()+inOfs));
-      if (tileDim != 0x40) return false;
+      if (tileDim != 0x40) {    // TODO: expand MBC header to allow non-hardcoded tile dimensions
+        std::printf("Invalid tile dimensions\n");
+        return false;
+      }
       inOfs += 4;
 
       palOfs = get32u((uint32_t*)(mosData.get()+inOfs));
-      if (palOfs < 24) return false;
+      if (palOfs < 24) {
+        std::printf("MOS header too small\n");
+        return false;
+      }
       inOfs = palOfs;
 
       {
         // comparing calculated size with actual input file length
         uint32_t size = palOfs + mosCols*mosRows*PALETTE_SIZE + mosCols*mosRows*4 + mosWidth*mosHeight;
-        if (mosSize < size) return false;
+        if (mosSize < size) {
+          std::printf("Incomplete or corrupted MOS file\n");
+          return false;
+        }
       }
 
       File fout(outFile.c_str(), "wb");
@@ -353,11 +429,11 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
         int curIndex = 0;
         uint32_t remTileHeight = mosHeight;   // remaining tile height to cover
-        for (uint32_t row = 0; row < mosRows; row++, remTileHeight -= 64u) {
-          uint32_t tileHeight = std::min(64u, remTileHeight);
+        for (uint32_t row = 0; row < mosRows; row++, remTileHeight -= tileDim) {
+          uint32_t tileHeight = std::min(tileDim, remTileHeight);
           uint32_t remTileWidth = mosWidth;   // remaining tile width to cover
-          for (uint32_t col = 0; col < mosCols; col++, curIndex++, remTileWidth -= 64u) {
-            uint32_t tileWidth = std::min(64u, remTileWidth);
+          for (uint32_t col = 0; col < mosCols; col++, curIndex++, remTileWidth -= tileDim) {
+            uint32_t tileWidth = std::min(tileDim, remTileWidth);
             uint32_t tileSizeIndexed = tileWidth*tileHeight;
 
             if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", curIndex);
@@ -415,21 +491,33 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
 
       // parsing TBC header
       if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_MBC_SIGNATURE, 4) != 0) return false;
+      if (std::strncmp(sig, HEADER_MBC_SIGNATURE, 4) != 0) {
+        std::printf("Invalid MBC signature\n");
+        return false;
+      }
 
       if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) return false;
+      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) {
+        std::printf("Invalid MBC version\n");
+        return false;
+      }
 
       if (fin.read(&compType, 4, 1) != 1) return false;
       compType = get32u(&compType);
 
       if (fin.read(&mosWidth, 4, 1) != 1) return false;
       mosWidth = get32u(&mosWidth);
-      if (mosWidth == 0) return false;
+      if (mosWidth == 0) {
+        std::printf("Invalid MBC width\n");
+        return false;
+      }
 
       if (fin.read(&mosHeight, 4, 1) != 1) return false;
       mosHeight = get32u(&mosHeight);
-      if (mosHeight == 0) return false;
+      if (mosHeight == 0) {
+        std::printf("Invalid MBC height\n");
+        return false;
+      }
 
       File fout(outFile.c_str(), "wb");
       if (!fout.error()) {
@@ -487,7 +575,10 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             uint32_t chunkSize;
             if (fin.read(&chunkSize, 4, 1) != 1) return false;
             chunkSize = get32u(&chunkSize);
-            if (chunkSize == 0) return false;
+            if (chunkSize == 0) {
+              std::printf("Invalid block size found for tile #%d\n", curIndex);
+              return false;
+            }
             TileDataPtr tileData(new TileData(curIndex, ptrIndexed, ptrPalette, ptrDeflated,
                                               0, 0, compType, chunkSize));
             if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {

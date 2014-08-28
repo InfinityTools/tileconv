@@ -263,13 +263,11 @@ FileType Options::GetFileType(const std::string &fileName) noexcept
   if (!fileName.empty()) {
     File f(fileName.c_str(), "rb");
     if (f.error()) {
-      std::printf("Could not open \"%s\"\n", fileName.c_str());
       return FileType::UNKNOWN;
     }
 
     char sig[4];
     if (f.read(sig, 1, 4) != 4) {
-      std::printf("Unable to read file signature from \"%s\"\n", fileName.c_str());
       return FileType::UNKNOWN;
     }
 
@@ -284,7 +282,6 @@ FileType Options::GetFileType(const std::string &fileName) noexcept
     } else if (std::strncmp(sig, "MBC ", 4) == 0) {
       retval = FileType::MBC;
     } else {
-      std::printf("Unable to detect file type for \"%s\"\n", fileName.c_str());
       return FileType::UNKNOWN;
     }
 
