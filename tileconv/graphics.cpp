@@ -192,9 +192,10 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
       }
 
       if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0)
+      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) {
         std::printf("Unsupported TBC version\n");
         return false;
+      }
 
       if (fin.read(&compType, 4, 1) != 1) return false;
       compType = get32u(&compType);
