@@ -53,6 +53,9 @@ bool Convert::execute() noexcept
 {
   // checking state
   if (getOptions().getInputCount() == 0) return false;
+  if (!getOptions().isSilent()) {
+    std::printf("Options: %s\n", getOptions().getOptionsSummary(true).c_str());
+  }
 
   Graphics gfx(m_options);
   bool retVal = true;

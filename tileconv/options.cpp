@@ -25,18 +25,24 @@ THE SOFTWARE.
 #include "version.h"
 #include "options.h"
 
-const int Options::MAX_NAME_LENGTH = 1024;
-const int Options::MAX_THREADS = 64;
-const int Options::DEFLATE = 256;
+const int Options::MAX_NAME_LENGTH    = 1024;
+const int Options::MAX_THREADS        = 64;
+const int Options::DEFLATE            = 256;
 
+const bool Options::DEF_HALT_ON_ERROR = true;
+const bool Options::DEF_MOSC          = false;
+const bool Options::DEF_DITHERING     = false;
+const bool Options::DEF_DEFLATE       = true;
+const int Options::DEF_SILENT         = 1;
+const Encoding Options::DEF_ENCODING  = Encoding::BC1;
 
 Options::Options() noexcept
-: m_haltOnError(true)
-, m_silent(1)
-, m_mosc(false)
-, m_dithering(false)
-, m_deflate(true)
-, m_encoding(Encoding::BC1)
+: m_haltOnError(DEF_HALT_ON_ERROR)
+, m_mosc(DEF_MOSC)
+, m_dithering(DEF_DITHERING)
+, m_deflate(DEF_DEFLATE)
+, m_silent(DEF_SILENT)
+, m_encoding(DEF_ENCODING)
 , m_inFiles()
 , m_outFile()
 {
@@ -380,3 +386,41 @@ const std::string& Options::GetEncodingName(int code) noexcept
 }
 
 
+std::string Options::getOptionsSummary(bool complete) const noexcept
+{
+  std::string sum;
+
+  if (complete || m_encoding != DEF_ENCODING || m_deflate != DEF_DEFLATE) {
+    if (!sum.empty()) sum += ", ";
+    sum += "Pixel encoding = ";
+    sum += GetEncodingName(GetEncodingCode(m_encoding, m_deflate));
+  }
+
+  if (complete || m_haltOnError != DEF_HALT_ON_ERROR) {
+    if (!sum.empty()) sum += ", ";
+    sum += "Halt on errors = ";
+    sum += (m_haltOnError) ? "enabled" : "disabled";
+  }
+
+  if (complete || m_silent != DEF_SILENT) {
+    if (!sum.empty()) sum += ", ";
+    sum += "Verbosity level = ";
+    if (m_silent == 0) sum += "silent";
+      else if (m_silent == 2) sum += "verbose";
+      else sum += "default";
+  }
+
+  if (complete || m_dithering != DEF_DITHERING) {
+    if (!sum.empty()) sum += ", ";
+    sum += "Color dithering = ";
+    sum += (m_dithering) ? "enabled" : "disabled";
+  }
+
+  if (complete || m_mosc != DEF_MOSC) {
+    if (!sum.empty()) sum += ", ";
+    if (m_mosc) sum += "Convert MBC to MOSC";
+      else sum += "Convert MBC to MOS";
+  }
+
+  return sum;
+}

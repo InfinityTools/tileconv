@@ -104,16 +104,32 @@ public:
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
   Encoding getEncoding() const noexcept { return m_encoding; }
 
+  /**
+   * Returns a string containing a list of options in textual form.
+   * \param complete If false, only options differing from the defaults are listed,
+   *                 if true, all options are listed.
+   * \return The list of options as text
+   */
+  std::string getOptionsSummary(bool complete) const noexcept;
+
 private:
-  static const int                              MAX_NAME_LENGTH;    // max. filepath length
-  static const int                              MAX_THREADS;        // max. number of threads
-  static const int                              DEFLATE;            // !DEFLATE deflates
+  static const int          MAX_NAME_LENGTH;    // max. filepath length
+  static const int          MAX_THREADS;        // max. number of threads
+  static const int          DEFLATE;            // !DEFLATE deflates
+
+  // default values for options
+  static const bool         DEF_HALT_ON_ERROR;
+  static const bool         DEF_MOSC;
+  static const bool         DEF_DITHERING;
+  static const bool         DEF_DEFLATE;
+  static const int          DEF_SILENT;
+  static const Encoding     DEF_ENCODING;
 
   bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
-  int                       m_silent;       // silence level [0:verbose, 1:summary only, 2:no output]
   bool                      m_mosc;         // create MOSC output
   bool                      m_dithering;    // apply color dithering to TIS/MOS output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
+  int                       m_silent;       // silence level [0:verbose, 1:summary only, 2:no output]
 //  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
   Encoding                  m_encoding;     // encoding type
   std::vector<std::string>  m_inFiles;
