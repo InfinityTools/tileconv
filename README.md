@@ -59,4 +59,4 @@ you can do so by modifying the file "config.mk" by hand.
 
 
 ### CONTACT
-If you have questions or comments please post them on [Spellhold Studios](http://www.shsforums.net/) or contact me (Argent77) by private message on the same forum.
+If you have questions or comments please post them on [Spellhold Studios](http://www.shsforums.net/topic/57588-tileconv-a-mostis-compressor/) or contact me (Argent77) by private message on the same forum.
