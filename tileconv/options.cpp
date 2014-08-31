@@ -76,7 +76,7 @@ bool Options::init(int argc, char *argv[]) noexcept
 
       switch (argv[i][1]) {
       case 'e':
-        setHaltOnError(true);
+        setHaltOnError(false);
         break;
       case 's':
         setSilence(2);
