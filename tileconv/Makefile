@@ -7,8 +7,9 @@ include config.mk
 CXX         ?= g++
 CXXFLAGS    = -c -Wall -O2 -std=c++11 -I$(ZLIB_INCLUDE) -I$(SQUISH_INCLUDE) -I$(PNGQUANT_INCLUDE)
 LDFLAGS     = -L$(ZLIB_LIB) -L$(SQUISH_LIB) -L$(PNGQUANT_LIB)
-SOURCES     = tileconv.cpp convert.cpp version.cpp graphics.cpp tiledata.cpp compress.cpp colors.cpp fileio.cpp colorquant.cpp options.cpp
-LIBS        =-lz -lsquish -limagequant
+SOURCES     = tileconv.cpp convert.cpp version.cpp graphics.cpp tilethreadpool.cpp tiledata.cpp compress.cpp colors.cpp fileio.cpp colorquant.cpp options.cpp
+SYSLIBS     = -lpthread
+LIBS        =-lz -lsquish -limagequant $(SYSLIBS)
 OBJECTS     = $(SOURCES:.cpp=.o)
 EXECUTABLE  = tileconv
 ifeq ($(OS),Windows_NT)

@@ -22,6 +22,7 @@ THE SOFTWARE.
 #include <cstdint>
 #include <cstring>
 #include "fileio.h"
+#include "tilethreadpool.h"
 #include "version.h"
 #include "options.h"
 
@@ -31,17 +32,19 @@ const int Options::DEFLATE            = 256;
 
 const bool Options::DEF_HALT_ON_ERROR = true;
 const bool Options::DEF_MOSC          = false;
-const bool Options::DEF_DITHERING     = false;
 const bool Options::DEF_DEFLATE       = true;
 const int Options::DEF_SILENT         = 1;
+const int Options::DEF_QUALITY        = 4;
+const int Options::DEF_THREADS        = 0;    // autodetect
 const Encoding Options::DEF_ENCODING  = Encoding::BC1;
 
 Options::Options() noexcept
 : m_haltOnError(DEF_HALT_ON_ERROR)
 , m_mosc(DEF_MOSC)
-, m_dithering(DEF_DITHERING)
 , m_deflate(DEF_DEFLATE)
 , m_silent(DEF_SILENT)
+, m_quality(DEF_QUALITY)
+, m_threads(DEF_THREADS)
 , m_encoding(DEF_ENCODING)
 , m_inFiles()
 , m_outFile()
@@ -108,22 +111,31 @@ bool Options::init(int argc, char *argv[]) noexcept
         setDeflate(false);
         break;
       case 'd':
-        setDithering(true);
+        std::printf("Parameter -d is deprecated. Use -q instead!");
+        break;
+      case 'q':
+        if (i < argc - 1) {
+          int level = std::atoi(argv[i+1]);
+          setQuality(level);
+          i++;    // skip level argument
+        } else {
+          showHelp();
+          return false;
+        }
         break;
       case 'z':
         setMosc(true);
         break;
-//      case 'j':
-//        if (i < argc - 1) {
-//          int jobs = std::atoi(argv[i+1]);
-//          jobs = std::max(0, std::min(MAX_THREADS, jobs));    // limiting jobs to a sane number
-//          setThreads(jobs);
-//          i++;    // skip jobs argument
-//        } else {
-//          showHelp();
-//          return false;
-//        }
-//        break;
+      case 'j':
+        if (i < argc - 1) {
+          int jobs = std::atoi(argv[i+1]);
+          setThreads(jobs);
+          i++;    // skip jobs argument
+        } else {
+          showHelp();
+          return false;
+        }
+        break;
       case 'V':
         std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
         return false;
@@ -187,9 +199,17 @@ void Options::showHelp() noexcept
   std::printf("                3: BC3/DXT5\n");
   std::printf("  -u          Do not apply tile compression.\n");
   std::printf("  -o outfile  Select output file. (Works with single input file only!)\n");
-  std::printf("  -d          Use color dithering when converting to TIS or MOS.\n");
   std::printf("  -z          MOS only: Decompress MBC into compressed MOS (MOSC).\n");
-//  std::printf("  -j num      Number of threads to use for the conversion process (0=auto)");
+  std::printf("  -d          Enable color dithering. (deprecated, use -q instead!)\n");
+  std::printf("  -q level    Specify quality vs. speed ratio when converting MBC->MOS\n");
+  std::printf("              or TBC->TIS. Supported levels: 0..9 (Default: 4)\n");
+  std::printf("              (0=fast and lower quality, 9=slow and higher quality)\n");
+  std::printf("              Applied level-dependent features:\n");
+  std::printf("                Dithering:             levels 5 to 9\n");
+  std::printf("                Posterization:         levels 0 to 2\n");
+  std::printf("                Additional techniques: levels 4 to 9\n");
+  std::printf("  -j num      Number of parallel jobs to speed up the conversion process.\n");
+  std::printf("              Valid numbers: 0 (autodetect), 1..%d (Default: 0)\n", TileThreadPool::MAX_THREADS);
   std::printf("  -V          Print version number and exit.\n\n");
   std::printf("Supported input file types: TIS, MOS, TBC, MBC\n");
   std::printf("Note: You can mix and match input files of each supported type.\n\n");
@@ -255,10 +275,23 @@ void Options::setSilence(int level) noexcept
 }
 
 
-//void Options::setThreads(int v) noexcept
-//{
-//  m_threads = std::max(0, std::min(MAX_THREADS, v));
-//}
+void Options::setQuality(int v) noexcept
+{
+  m_quality = std::max(0, std::min(9, v));
+}
+
+
+void Options::setThreads(int  v) noexcept
+{
+  // limiting threads to a sane number
+  m_threads = std::max(0, std::min((int)TileThreadPool::MAX_THREADS, v));
+}
+
+
+int Options::getThreads() const noexcept
+{
+  return m_threads ? m_threads : TileThreadPool::AUTO_THREADS;
+}
 
 
 // ----------------------- STATIC METHODS -----------------------
@@ -392,34 +425,47 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
 
   if (complete || m_encoding != DEF_ENCODING || m_deflate != DEF_DEFLATE) {
     if (!sum.empty()) sum += ", ";
-    sum += "Pixel encoding = ";
+    sum += "pixel encoding = ";
     sum += GetEncodingName(GetEncodingCode(m_encoding, m_deflate));
   }
 
   if (complete || m_haltOnError != DEF_HALT_ON_ERROR) {
     if (!sum.empty()) sum += ", ";
-    sum += "Halt on errors = ";
+    sum += "halt on errors = ";
     sum += (m_haltOnError) ? "enabled" : "disabled";
   }
 
   if (complete || m_silent != DEF_SILENT) {
     if (!sum.empty()) sum += ", ";
-    sum += "Verbosity level = ";
-    if (m_silent == 0) sum += "silent";
-      else if (m_silent == 2) sum += "verbose";
-      else sum += "default";
+    sum += "verbosity level = ";
+    if (m_silent == 0) {
+      sum += "silent";
+    }else if (m_silent == 2) {
+      sum += "verbose";
+    } else {
+      sum += "default";
+    }
   }
 
-  if (complete || m_dithering != DEF_DITHERING) {
+  if (complete || m_quality != DEF_QUALITY) {
     if (!sum.empty()) sum += ", ";
-    sum += "Color dithering = ";
-    sum += (m_dithering) ? "enabled" : "disabled";
+    sum += "quality = " + std::to_string(m_quality);
   }
 
   if (complete || m_mosc != DEF_MOSC) {
     if (!sum.empty()) sum += ", ";
-    if (m_mosc) sum += "Convert MBC to MOSC";
-      else sum += "Convert MBC to MOS";
+    if (m_mosc) sum += "convert MBC to MOSC";
+      else sum += "convert MBC to MOS";
+  }
+
+  if (complete || m_threads != DEF_THREADS) {
+    if (!sum.empty()) sum += ", ";
+    sum += "jobs = ";
+    if (m_threads == 0) {
+      sum += "autodetected (" + std::to_string(TileThreadPool::AUTO_THREADS) + ")";
+    } else {
+      sum += std::to_string(m_threads);
+    }
   }
 
   return sum;
