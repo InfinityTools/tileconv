@@ -124,7 +124,6 @@ bool ColorQuant::quantize() noexcept
   if ((m_liqResult = liq_quantize_image(m_liqAttr, m_liqImage)) == nullptr) {
     return false;
   }
-  liq_set_dithering_level(m_liqResult, m_dithering ? 1.0f : 0.0f);
 
   if (LIQ_OK != liq_write_remapped_image(m_liqResult, m_liqImage, m_target, m_targetSize)) {
     return false;
@@ -153,39 +152,31 @@ bool ColorQuant::quantize() noexcept
 
 void ColorQuant::setMaxColors(int colors) noexcept
 {
-  if (colors < 2) colors = 2;
-  if (colors > 256) colors = 256;
-  m_maxColors = colors;
+  m_maxColors = std::max(2, std::min(256, colors));
 }
 
 void ColorQuant::setQuality(int min, int max) noexcept
 {
-  if (min > max) { int tmp = min; min = max; max = tmp; }
-  if (min < 0) min = 0; if (min > max) min = max;
-  if (max > 100) max = 100;
-  if (max < min) max = min;
+  min = std::max(0, std::min(100, min));
+  max = std::max(0, std::min(100, max));
+  if (min > max) std::swap(min, max);
   m_qualityMin = min;
   m_qualityMax = max;
 }
 
 void ColorQuant::setSpeed(int speed) noexcept
 {
-  if (speed < 0) speed = 0;
-  if (speed > 10) speed = 10;
+  m_speed = std::max(1, std::min(10, speed));
 }
 
 void ColorQuant::setMinOpacity(int min) noexcept
 {
-  if (min < 0) min = 0;
-  if (min > 255) min = 255;
-  m_minOpacity = min;
+  m_minOpacity = std::max(0, std::min(255, min));
 }
 
 void ColorQuant::setPosterization(int bits) noexcept
 {
-  if (bits < 0) bits = 0;
-  if (bits > 4) bits = 4;
-  m_posterization = bits;
+  m_posterization = std::max(0, std::min(4, bits));
 }
 
 double ColorQuant::getQuantizationError() noexcept
