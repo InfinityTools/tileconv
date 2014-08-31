@@ -17,20 +17,29 @@ A detailed description of the TBC and MBC formats can be found in FORMATS.
 Usage: tileconv [options] infile [infile2 [...]]
 
 Options:
- -e          Do not halt on errors.
- -s          Be silent.
- -v          Be verbose.
- -t type     Select pixel encoding type.
-             Supported types:
-               0: No pixel encoding
-               1: BC1/DXT1 (Default)
-               2: BC2/DXT3
-               3: BC3/DXT5
- -u          Do not apply tile compression.
- -o outfile  Select output file. (Works with single input file only!)
- -d          Use color dithering when converting to TIS or MOS.
- -z          MOS only: Decompress MBC into compressed MOS (MOSC).
- -V          Print version number and exit.
+  -e          Do not halt on errors.
+  -s          Be silent.
+  -v          Be verbose.
+  -t type     Select pixel encoding type.
+              Supported types:
+                0: No pixel encoding
+                1: BC1/DXT1 (Default)
+                2: BC2/DXT3
+                3: BC3/DXT5
+  -u          Do not apply tile compression.
+  -o outfile  Select output file. (Works with single input file only!)
+  -z          MOS only: Decompress MBC into compressed MOS (MOSC).
+  -d          Enable color dithering. (deprecated, use -q instead!)
+  -q level    Specify quality vs. speed ratio when converting MBC->MOS
+              or TBC->TIS. Supported levels: 0..9 (Default: 4)
+              (0=fast and lower quality, 9=slow and higher quality)
+              Applied level-dependent features:
+                Dithering:             levels 5 to 9
+                Posterization:         levels 0 to 2
+                Additional techniques: levels 4 to 9
+  -j num      Number of parallel jobs to speed up the conversion process.
+              Valid numbers: 0 (autodetect), 1..256 (Default: 0)
+  -V          Print version number and exit.
 
 Supported input file types: TIS, MOS, TBC, MBC
 Note: You can mix and match input files of each supported type.
@@ -59,4 +68,4 @@ you can do so by modifying the file "config.mk" by hand.
 
 
 ### CONTACT
-If you have questions or comments please post them on [Spellhold Studios](http://www.shsforums.net/) or contact me (Argent77) by private message on the same forum.
+If you have questions or comments please post them on [Spellhold Studios](http://www.shsforums.net/topic/57588-tileconv-a-mostis-compressor/) or contact me (Argent77) by private message on the same forum.
