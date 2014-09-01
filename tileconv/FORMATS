@@ -4,7 +4,7 @@ Description of the file formats TBC and MBC
 Main Header (TBC):
 Offset    Size    Description
 0x0000    4       Signature ('TBC ')
-0x0004    4       Version ('V1.0')
+0x0004    4       Version (currently supported: 'V1.0')
 0x0008    4       Compression type (see below)
 0x000c    4       Tile count
 0x0010    var     Compressed Tile(s)
@@ -12,7 +12,7 @@ Offset    Size    Description
 Main Header (MBC):
 Offset    Size    Description
 0x0000    4       Signature ('MBC ')
-0x0004    4       Version ('V1.0')
+0x0004    4       Version (currently supported: 'V1.0')
 0x0008    4       Compression type (see below)
 0x000c    4       Width
 0x0010    4       Height
@@ -30,11 +30,11 @@ Offset    Size    Description
 Compressed Tile:
 Offset    Size    Description
 0x0000    4       Size of compressed data block
-0x0004    var     zlib compressed Encoded Tile (if compression type < 256) 
-                  or unmodified Encoded Tile (if compression type >= 256)
+0x0004    var     zlib compressed Encoded Tile (if compression type < 0x0100) 
+                  or unmodified Encoded Tile (if compression type >= 0x0100)
 
 
-Supported compression types:
+Supported compression types in format version V1.0:
 0x0000    no pixel encoding, zlib compressed tiles
 0x0001    BC1 (DXT1) pixel encoding, zlib compressed tiles
 0x0002    BC2 (DXT3) pixel encoding, zlib compressed tiles
