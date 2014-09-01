@@ -1,7 +1,7 @@
 TILECONV
 ~~~~~~~~
 
-Version: 0.1
+Version: 0.2
 Author:  Argent77
 
 This tool allows you to compress or decompress TIS and MOS files provided by 
@@ -90,3 +90,8 @@ Version history
 
 v0.1 (2014-08-30)
   * Initial release
+
+v0.2 (2014-09-01)
+  * Greatly increased conversion speed
+  * Added new options "-q level" and "-j num"
+  * Deprecated option "-d"
