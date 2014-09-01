@@ -22,9 +22,11 @@ THE SOFTWARE.
 #include "graphics.h"
 
 
-TileData::TileData(int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
+TileData::TileData(bool encode, int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
                    int width, int height, unsigned type, unsigned deflatedSize) noexcept
-: ptrIndexed(indexed)
+
+: isEncoding(encode)
+, ptrIndexed(indexed)
 , ptrPalette(palette)
 , ptrDeflated(deflated)
 , index(idx)
@@ -32,6 +34,7 @@ TileData::TileData(int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
 , tileHeight(height)
 , size(deflatedSize)
 , encodingType(type)
+, error(false)
 , errorMsg()
 {
 }

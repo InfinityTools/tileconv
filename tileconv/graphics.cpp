@@ -28,6 +28,7 @@ THE SOFTWARE.
 #include "graphics.h"
 #include "colors.h"
 #include "compress.h"
+#include "tilethreadpool.h"
 
 
 const char Graphics::HEADER_TIS_SIGNATURE[4]  = {'T', 'I', 'S', ' '};
@@ -126,15 +127,35 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         if (!getOptions().isSilent()) std::printf("Tile count: %d\n", tileCount);
 
         // converting tiles
-        BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-        BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-        BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        unsigned nextTileIdx = 0;
         double ratioCount = 0.0;    // counts the compression ratios of all tiles
         for (unsigned tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
 
+          // writing converted tiles to disk
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+                 (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
+              }
+              return false;
+            }
+            double ratio = 0.0;
+            if (!writeEncodedTile(retVal, fout, ratio)) {
+              return false;
+            }
+            ratioCount += ratio;
+            nextTileIdx++;
+          }
+
           // creating new tile data object
-          TileDataPtr tileData(new TileData(tileIdx, ptrIndexed, ptrPalette, ptrDeflated,
+          BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+          BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+          BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+          TileDataPtr tileData(new TileData(true, tileIdx, ptrIndexed, ptrPalette, ptrDeflated,
                                             tileDim, tileDim, 0, 0));
           // reading paletted tile
           if (fin.read(tileData->ptrPalette.get(), 1, PALETTE_SIZE) != PALETTE_SIZE) {
@@ -144,20 +165,39 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             return false;
           }
 
-          // encoding tile
-          if (!encodeTile(tileData)) {
-            if (!tileData->errorMsg.empty()) {
-              std::printf("%s", tileData->errorMsg.c_str());
-            }
-            return false;
+          // Wait until another tile data block can be added to the thread pool
+          while (!pool.canAddTileData()) {
+//            std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
           }
+          pool.addTileData(tileData);
+        }
 
-          // writing result to output file
-          double ratio = 0.0;
-          if (!writeEncodedTile(tileData, fout, ratio)) {
-            return false;
+        // retrieving the remaining tile data blocks in queue
+        while (!pool.finished()) {
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+              (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
+              }
+              return false;
+            }
+            double ratio = 0.0;
+            if (!writeEncodedTile(retVal, fout, ratio)) {
+              return false;
+            }
+            ratioCount += ratio;
+            nextTileIdx++;
           }
-          ratioCount += ratio;
+//          std::this_thread::yield();
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (nextTileIdx < tileCount) {
+          std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
+          return false;
         }
 
         // displaying summary
@@ -228,10 +268,25 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
                       tileCount, compType, Options::GetEncodingName(compType).c_str());
         }
 
-        BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-        BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-        BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        uint32_t nextTileIdx = 0;
         for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
+          // writing converted tiles to disk
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+                 (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
+              }
+              return false;
+            }
+            if (!writeDecodedTisTile(retVal, fout)) {
+              return false;
+            }
+            nextTileIdx++;
+          }
+
           // creating new tile data object
           uint32_t chunkSize;
           if (fin.read(&chunkSize, 4, 1) != 1) return false;
@@ -240,22 +295,46 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             std::printf("Invalid block size found for tile #%d\n", tileIdx);
             return false;
           }
-          TileDataPtr tileData(new TileData(tileIdx, ptrIndexed, ptrPalette, ptrDeflated,
+          BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+          BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+          BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+          TileDataPtr tileData(new TileData(false, tileIdx, ptrIndexed, ptrPalette, ptrDeflated,
                                             0, 0, compType, chunkSize));
           if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {
             return false;
           }
 
-          if (!decodeTile(tileData)) {
-            if (!tileData->errorMsg.empty()) {
-              std::printf("%s", tileData->errorMsg.c_str());
-            }
-            return false;
+          // Wait until another tile data block can be added to the thread pool
+          while (!pool.canAddTileData()) {
+//            std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
           }
+          pool.addTileData(tileData);
+        }
 
-          if (!writeDecodedTisTile(tileData, fout)) {
-            return false;
+        // retrieving the remaining tile data blocks in queue
+        while (!pool.finished()) {
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+                 (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
+              }
+              return false;
+            }
+            if (!writeDecodedTisTile(retVal, fout)) {
+              return false;
+            }
+            nextTileIdx++;
           }
+//          std::this_thread::yield();
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (nextTileIdx < tileCount) {
+          std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
+          return false;
         }
 
         // displaying summary
@@ -424,9 +503,8 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         if (getOptions().isVerbose()) std::printf("Tile count: %d\n", tileCount);
 
         // processing tiles
-        BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-        BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-        BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        unsigned nextTileIdx = 0;
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
         int curIndex = 0;
         uint32_t remTileHeight = mosHeight;   // remaining tile height to cover
@@ -439,8 +517,29 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
 
             if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", curIndex);
 
+            // writing converted tiles to disk
+            while (pool.hasResult() && pool.peekResult() != nullptr &&
+                   (unsigned)pool.peekResult()->index == nextTileIdx) {
+              TileDataPtr retVal = pool.getResult();
+              if (retVal == nullptr || retVal->error) {
+                if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                  std::printf("%s", retVal->errorMsg.c_str());
+                }
+                return false;
+              }
+              double ratio = 0.0;
+              if (!writeEncodedTile(retVal, fout, ratio)) {
+                return false;
+              }
+              ratioCount += ratio;
+              nextTileIdx++;
+            }
+
             // creating new tile data object
-            TileDataPtr tileData(new TileData(curIndex, ptrIndexed, ptrPalette, ptrDeflated,
+            BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+            BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+            BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+            TileDataPtr tileData(new TileData(true, curIndex, ptrIndexed, ptrPalette, ptrDeflated,
                                               tileWidth, tileHeight, 0, 0));
             // reading paletted tile
             std::memcpy(tileData->ptrPalette.get(), mosData.get()+palOfs, PALETTE_SIZE);
@@ -451,19 +550,40 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             tileOfs += 4;
             std::memcpy(tileData->ptrIndexed.get(), mosData.get()+dataOfs+v32, tileSizeIndexed);
 
-            if (!encodeTile(tileData)) {
-              if (!tileData->errorMsg.empty()) {
-                std::printf("%s", tileData->errorMsg.c_str());
+            // Wait until another tile data block can be added to the thread pool
+            while (!pool.canAddTileData()) {
+//              std::this_thread::yield();
+              std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+            pool.addTileData(tileData);
+          }
+        }
+
+        // retrieving the remaining tile data blocks in queue
+        while (!pool.finished()) {
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+                 (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
               }
               return false;
             }
-
             double ratio = 0.0;
-            if (!writeEncodedTile(tileData, fout, ratio)) {
+            if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
             }
             ratioCount += ratio;
+            nextTileIdx++;
           }
+//          std::this_thread::yield();
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (nextTileIdx < tileCount) {
+          std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
+          return false;
         }
 
         // displaying summary
@@ -564,13 +684,29 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
                       mosWidth, mosHeight, mosCols, mosRows, compType, Options::GetEncodingName(compType).c_str());
         }
 
-        BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-        BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-        BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        uint32_t tileCount = mosCols * mosRows;
+        uint32_t nextTileIdx = 0;
         int curIndex = 0;                       // the current tile index
         for (uint32_t row = 0; row < mosRows; row++) {
           for (uint32_t col = 0; col < mosCols; col++, curIndex++) {
             if (getOptions().isVerbose()) std::printf("Decoding tile #%d\n", curIndex);
+
+            // writing converted tiles to disk
+            while (pool.hasResult() && pool.peekResult() != nullptr &&
+                   (unsigned)pool.peekResult()->index == nextTileIdx) {
+              TileDataPtr retVal = pool.getResult();
+              if (retVal == nullptr || retVal->error) {
+                if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                  std::printf("%s", retVal->errorMsg.c_str());
+                }
+                return false;
+              }
+              if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
+                return false;
+              }
+              nextTileIdx++;
+            }
 
             // creating new tile data object
             uint32_t chunkSize;
@@ -580,23 +716,47 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
               std::printf("Invalid block size found for tile #%d\n", curIndex);
               return false;
             }
-            TileDataPtr tileData(new TileData(curIndex, ptrIndexed, ptrPalette, ptrDeflated,
+            BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+            BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+            BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+            TileDataPtr tileData(new TileData(false, curIndex, ptrIndexed, ptrPalette, ptrDeflated,
                                               0, 0, compType, chunkSize));
             if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {
               return false;
             }
 
-            if (!decodeTile(tileData)) {
-              if (!tileData->errorMsg.empty()) {
-                std::printf("%s", tileData->errorMsg.c_str());
+            // Wait until another tile data block can be added to the thread pool
+            while (!pool.canAddTileData()) {
+//              std::this_thread::yield();
+              std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+            pool.addTileData(tileData);
+          }
+        }
+
+        // retrieving the remaining tile data blocks in queue
+        while (!pool.finished()) {
+          while (pool.hasResult() && pool.peekResult() != nullptr &&
+                 (unsigned)pool.peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool.getResult();
+            if (retVal == nullptr || retVal->error) {
+              if (retVal != nullptr && !retVal->errorMsg.empty()) {
+                std::printf("%s", retVal->errorMsg.c_str());
               }
               return false;
             }
-
-            if (!writeDecodedMosTile(tileData, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
+            if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
               return false;
             }
+            nextTileIdx++;
           }
+//          std::this_thread::yield();
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (nextTileIdx < tileCount) {
+          std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
+          return false;
         }
 
         if (getOptions().isMosc()) {
@@ -724,9 +884,10 @@ bool Graphics::writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32
 }
 
 
-bool Graphics::encodeTile(TileDataPtr tileData) noexcept
+TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
 {
-  if (tileData->ptrIndexed != nullptr && tileData->ptrPalette != nullptr &&
+  if (tileData != nullptr &&
+      tileData->ptrIndexed != nullptr && tileData->ptrPalette != nullptr &&
       tileData->ptrDeflated != nullptr && tileData->index >= 0 &&
       tileData->tileWidth > 0 && tileData->tileHeight > 0) {
     BytePtr  ptrEncoded(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
@@ -736,7 +897,6 @@ bool Graphics::encodeTile(TileDataPtr tileData) noexcept
     uint32_t tileSizeEncoded;       // pixel encoded size of the tile
     int      squishFlags = squish::kColourIterativeClusterFit;
     Colors   colors(getOptions());
-    Compression compression;
 
     tileData->size = 0;
 
@@ -795,20 +955,23 @@ bool Graphics::encodeTile(TileDataPtr tileData) noexcept
         // converting tile to ARGB
         if (colors.palToARGB(tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
                              ptrARGB.get(), tileSizePixels) != tileSizePixels) {
+          tileData->error = true;
           tileData->errorMsg.assign("Error during color space conversion\n");
-          return false;
+          return tileData;
         }
         // padding tile if needed
         if (colors.padBlock(ptrARGB.get(), ptrARGB2.get(), tileData->tileWidth, tileData->tileHeight,
                             tileWidthPadded, tileHeightPadded) != tileSizePixelsPadded) {
+          tileData->error = true;
           tileData->errorMsg.assign("Error while encoding pixels\n");
-          return false;
+          return tileData;
         }
         // preparing correct color components order
         if (colors.reorderColors(ptrARGB2.get(), tileSizePixelsPadded,
                                  Colors::FMT_ARGB, Colors::FMT_ABGR) < tileSizePixelsPadded) {
+          tileData->error = true;
           tileData->errorMsg.assign("Error while encoding pixels\n");
-          return false;
+          return tileData;
         }
         uint8_t *argbPtr = ptrARGB2.get();
         uint8_t *encodedPtr = ptrEncoded.get();
@@ -825,11 +988,13 @@ bool Graphics::encodeTile(TileDataPtr tileData) noexcept
 
     if (getOptions().isDeflate()) {
       // applying zlib compression
+      Compression compression;
       tileData->size = compression.deflate(ptrEncoded.get(), tileSizeEncoded+HEADER_TILE_ENCODED_SIZE,
                                            tileData->ptrDeflated.get(), MAX_TILE_SIZE_32*2);
       if (tileData->size == 0) {
+        tileData->error = true;
         tileData->errorMsg.assign("Error while compressing tile data\n");
-        return false;
+        return tileData;
       }
     } else {
       // using pixel encoding only
@@ -837,15 +1002,16 @@ bool Graphics::encodeTile(TileDataPtr tileData) noexcept
       std::memcpy(tileData->ptrDeflated.get(), ptrEncoded.get(), tileData->size);
     }
 
-    return true;
+    return tileData;
   }
-  return false;
+  return TileDataPtr(nullptr);
 }
 
 
-bool Graphics::decodeTile(TileDataPtr tileData) noexcept
+TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
 {
-  if (tileData->ptrIndexed != nullptr && tileData->ptrPalette != nullptr &&
+  if (tileData != nullptr &&
+      tileData->ptrIndexed != nullptr && tileData->ptrPalette != nullptr &&
       tileData->ptrDeflated != nullptr && tileData->index >= 0 && tileData->size > 0) {
     BytePtr  ptrARGB(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
     BytePtr  ptrARGB2(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
@@ -854,10 +1020,10 @@ bool Graphics::decodeTile(TileDataPtr tileData) noexcept
     uint32_t tileWidth, tileHeight;
     uint32_t tileSizeIndexed;
     Colors   colors(getOptions());
-    Compression compression;
 
     if (Options::IsTileDeflated(tileData->encodingType)) {
       // inflating zlib compressed data
+      Compression compression;
       compression.inflate(tileData->ptrDeflated.get(), tileData->size, ptrEncoded.get(), MAX_TILE_SIZE_32);
     } else {
       // copy pixel encoded tile data
@@ -901,27 +1067,30 @@ bool Graphics::decodeTile(TileDataPtr tileData) noexcept
       uint32_t tileSizeARGB = tileWidthPadded*tileHeightPadded;
       if (colors.reorderColors(ptrARGB2.get(), tileSizeARGB,
                                Colors::FMT_ABGR, Colors::FMT_ARGB) < tileSizeARGB) {
+        tileData->error = true;
         tileData->errorMsg.assign("Error while decoding pixels\n");
-        return false;
+        return tileData;
       }
       // unpadding tile block
       if (colors.unpadBlock(ptrARGB2.get(), ptrARGB.get(), tileWidthPadded,
                             tileHeightPadded, tileWidth, tileHeight) != tileSizeIndexed) {
+        tileData->error = true;
         tileData->errorMsg.assign("Error while decoding pixels\n");
-        return false;
+        return tileData;
       }
 
       // applying color reduction
       if (colors.ARGBToPal(ptrARGB.get(), tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
                            tileWidth, tileHeight) != tileSizeIndexed) {
+        tileData->error = true;
         tileData->errorMsg.assign("Error while decoding pixels\n");
-        return false;
+        return tileData;
       }
     }
 
     tileData->size = tileSizeIndexed + PALETTE_SIZE;
 
-    return true;
+    return tileData;
   }
-  return false;
+  return TileDataPtr(nullptr);
 }

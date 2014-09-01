@@ -67,8 +67,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
     if (!quant.setSource(src, width, height)) return 0;
     if (!quant.setTarget(dst, size)) return 0;
     if (!quant.setPalette(palette, 1024)) return 0;
-//    quant.setPosterization(2);    // optimizing for RGB565 colors
-    quant.setDithering(getOptions().isDithering());
+    quant.setSpeed(10 - getOptions().getQuality());   // speed is defined as "10 - quality"
 
     if (!quant.quantize()) return 0;
     if (getOptions().isVerbose()) {

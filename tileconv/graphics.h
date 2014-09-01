@@ -21,7 +21,6 @@ THE SOFTWARE.
 */
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
-
 #include <string>
 #include "types.h"
 #include "options.h"
@@ -60,10 +59,10 @@ private:
                            uint32_t &tileOfs, uint32_t &dataOfsRel, uint32_t dataOfsBase) noexcept;
 
   /** Encodes a single tile. Returns success state. */
-  bool encodeTile(TileDataPtr tileData) noexcept;
+  TileDataPtr encodeTile(TileDataPtr tileData) noexcept;
 
   /** Decodes a single tile. Returns success state. */
-  bool decodeTile(TileDataPtr tileData) noexcept;
+  TileDataPtr decodeTile(TileDataPtr tileData) noexcept;
 
 private:
   static const char HEADER_TIS_SIGNATURE[4];          // TIS signature
@@ -84,6 +83,8 @@ private:
   static const unsigned MAX_TILE_SIZE_32;             // max. size (in bytes) of a 32-bit pixels tile
 
   const Options&  m_options;
+
+  friend class TileThreadPool;
 };
 
 

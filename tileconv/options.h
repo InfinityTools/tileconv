@@ -66,39 +66,39 @@ public:
   int getInputCount() const noexcept { return m_inFiles.size(); }
   const std::string& getInput(int idx) const noexcept;
 
-  /** Define output file name (for single file conversion only). Default: auto-generate */
+  /** Define output file name (for single file conversion only). */
   bool setOutput(const std::string &outFile) noexcept;
   /** Call to activate auto-generation of output filename. */
   void resetOutput() noexcept;
   bool isOutput() const noexcept { return !m_outFile.empty(); }
   const std::string& getOutput() const noexcept { return m_outFile; }
 
-  /** Cancel operation on error? Only effective when processing multiple files. Default: true */
+  /** Cancel operation on error? Only effective when processing multiple files. */
   void setHaltOnError(bool b) noexcept { m_haltOnError = b; }
   bool isHaltOnError() const noexcept { return m_haltOnError; }
 
-  /** Level of text output. 0=verbose, 1=summary only, 2=no output. Default: 1 */
+  /** Level of text output. 0=verbose, 1=summary only, 2=no output. */
   void setSilence(int level) noexcept;
   int getSilence() const noexcept { return m_silent; }
   /** Check for specific verbosity levels. */
   bool isSilent() const noexcept { return m_silent > 1; }
   bool isVerbose() const noexcept { return m_silent < 1; }
 
-  /** Create MOSC files (MBC->MOS conversion only)? Default: false */
+  /** Create MOSC files (MBC->MOS conversion only)? */
   void setMosc(bool b) noexcept { m_mosc = b; }
   bool isMosc() const noexcept { return m_mosc; }
 
-  /** Apply color dithering when decoding tiles? Default: true */
-  void setDithering(bool b) noexcept { m_dithering = b; }
-  bool isDithering() const noexcept { return m_dithering; }
+  /** Color reduction quality in range 0..9. Calculate "r = 10 - quality" to get real value. */
+  void setQuality(int v) noexcept;
+  int getQuality() const noexcept { return m_quality; }
 
   /** Apply zlib compression to tiles? */
   void setDeflate(bool b) noexcept { m_deflate = b; }
   bool isDeflate() const noexcept { return m_deflate; }
 
   /** Number of threads to use for encoding/decoding. (0=autodetect) */
-//  void setThreads(int v) noexcept;
-//  int getThreads() const noexcept { return m_threads; }
+  void setThreads(int v) noexcept;
+  int getThreads() const noexcept;
 
   /** Specify encoding type. Default: BC1 */
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
@@ -120,17 +120,18 @@ private:
   // default values for options
   static const bool         DEF_HALT_ON_ERROR;
   static const bool         DEF_MOSC;
-  static const bool         DEF_DITHERING;
   static const bool         DEF_DEFLATE;
   static const int          DEF_SILENT;
+  static const int          DEF_QUALITY;
+  static const int          DEF_THREADS;
   static const Encoding     DEF_ENCODING;
 
   bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
   bool                      m_mosc;         // create MOSC output
-  bool                      m_dithering;    // apply color dithering to TIS/MOS output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
-  int                       m_silent;       // silence level [0:verbose, 1:summary only, 2:no output]
-//  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
+  int                       m_silent;       // silence level (0:verbose, 1:summary only, 2:no output)
+  int                       m_quality;      // color reduction quality (0:fast, 9:slow)
+  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
   Encoding                  m_encoding;     // encoding type
   std::vector<std::string>  m_inFiles;
   std::string               m_outFile;

@@ -28,9 +28,10 @@ THE SOFTWARE.
 
 /** Data structure needed to process individual tiles independently */
 struct TileData {
-  TileData(int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
+  TileData(bool encode, int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
            int width, int height, unsigned type, unsigned deflatedSize) noexcept;
 
+  bool isEncoding;        // indicates whether this data is used for encoding (true) or decoding (false)
   BytePtr ptrIndexed;     // storage for indexed tile (encoding: in, decoding out)
   BytePtr ptrPalette;     // storage for palette (encoding: in, decoding: out)
   BytePtr ptrDeflated;    // storage for compressed tile (encoding: out, decoding: in)
@@ -39,6 +40,7 @@ struct TileData {
   int tileHeight;         // height of the tile (encoding: in, decoding: out)
   uint32_t size;          // data size (encoding: deflated size, decoding input: deflated size, decoding output: size of palette+indexed tile, error: 0)
   uint32_t encodingType;  // encoding type (needed for decoding)
+  bool error;             // true if an error occurred
   std::string errorMsg;   // Contains a descriptive message if an error occurred
 };
 
