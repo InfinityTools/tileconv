@@ -815,8 +815,8 @@ bool Graphics::writeEncodedTile(TileDataPtr tileData, File &file, double &ratio)
       int tileSizeIndexed = tileData->tileWidth * tileData->tileHeight;
       ratio = ((double)(tileData->size+HEADER_TILE_COMPRESSED_SIZE)*100.0) / (double)(tileSizeIndexed+PALETTE_SIZE);
       if (getOptions().isVerbose()) {
-        std::printf("Conversion finished. Original size = %d bytes. Compressed size = %d bytes. Compression ratio: %.2f%%.\n",
-                    tileSizeIndexed+PALETTE_SIZE, tileData->size+HEADER_TILE_COMPRESSED_SIZE, ratio);
+        std::printf("Tile #%d finished. Original size = %d bytes. Compressed size = %d bytes. Compression ratio: %.2f%%.\n",
+                    tileData->index, tileSizeIndexed+PALETTE_SIZE, tileData->size+HEADER_TILE_COMPRESSED_SIZE, ratio);
       }
       return true;
     } else {
