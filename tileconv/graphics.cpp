@@ -984,6 +984,12 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
         squish::CompressImage(argbPtr, tileWidthPadded, tileHeightPadded, encodedPtr, squishFlags);
         break;
       }
+      default:
+      {
+        tileData->error = true;
+        tileData->errorMsg.assign("Unknown pixel encoding type\n");
+        return tileData;
+      }
     }
 
     if (getOptions().isDeflate()) {
@@ -1047,43 +1053,58 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
     uint32_t tileHeightPadded = colors.getPaddedValue(tileHeight);
 
     // decoding pixel compression
-    if (Options::GetEncodingType(tileData->encodingType) == Encoding::RAW) {
-      // simply extracting palette and pixel data
-      std::memcpy(tileData->ptrPalette.get(), ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE, PALETTE_SIZE);
-      std::memcpy(tileData->ptrIndexed.get(), ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE+PALETTE_SIZE,
-                  tileSizeIndexed);
-    } else {
-      // decoding BCx pixel data
-      int squishFlags;
-      switch (Options::GetEncodingType(tileData->encodingType)) {
-        case Encoding::BC2: squishFlags = squish::kDxt3; break;
-        case Encoding::BC3: squishFlags = squish::kDxt5; break;
-        default:            squishFlags = squish::kDxt1; break;
+    switch (Options::GetEncodingType(tileData->encodingType)) {
+      case Encoding::RAW:
+      {
+        // simply extracting palette and pixel data
+        std::memcpy(tileData->ptrPalette.get(), ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE, PALETTE_SIZE);
+        std::memcpy(tileData->ptrIndexed.get(), ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE+PALETTE_SIZE,
+                    tileSizeIndexed);
+        break;
       }
-      // decoding pixel data
-      squish::DecompressImage(ptrARGB2.get(), tileWidthPadded, tileHeightPadded,
-                              ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE, squishFlags);
-      // fixing color orders
-      uint32_t tileSizeARGB = tileWidthPadded*tileHeightPadded;
-      if (colors.reorderColors(ptrARGB2.get(), tileSizeARGB,
-                               Colors::FMT_ABGR, Colors::FMT_ARGB) < tileSizeARGB) {
-        tileData->error = true;
-        tileData->errorMsg.assign("Error while decoding pixels\n");
-        return tileData;
-      }
-      // unpadding tile block
-      if (colors.unpadBlock(ptrARGB2.get(), ptrARGB.get(), tileWidthPadded,
-                            tileHeightPadded, tileWidth, tileHeight) != tileSizeIndexed) {
-        tileData->error = true;
-        tileData->errorMsg.assign("Error while decoding pixels\n");
-        return tileData;
-      }
+      case Encoding::BC1:
+      case Encoding::BC2:
+      case Encoding::BC3:
+      {
+        // decoding BCx pixel data
+        int squishFlags;
+        switch (Options::GetEncodingType(tileData->encodingType)) {
+          case Encoding::BC2: squishFlags = squish::kDxt3; break;
+          case Encoding::BC3: squishFlags = squish::kDxt5; break;
+          default:            squishFlags = squish::kDxt1; break;
+        }
+        // decoding pixel data
+        squish::DecompressImage(ptrARGB2.get(), tileWidthPadded, tileHeightPadded,
+                                ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE, squishFlags);
+        // fixing color orders
+        uint32_t tileSizeARGB = tileWidthPadded*tileHeightPadded;
+        if (colors.reorderColors(ptrARGB2.get(), tileSizeARGB,
+                                 Colors::FMT_ABGR, Colors::FMT_ARGB) < tileSizeARGB) {
+          tileData->error = true;
+          tileData->errorMsg.assign("Error while decoding pixels\n");
+          return tileData;
+        }
+        // unpadding tile block
+        if (colors.unpadBlock(ptrARGB2.get(), ptrARGB.get(), tileWidthPadded,
+                              tileHeightPadded, tileWidth, tileHeight) != tileSizeIndexed) {
+          tileData->error = true;
+          tileData->errorMsg.assign("Error while decoding pixels\n");
+          return tileData;
+        }
 
-      // applying color reduction
-      if (colors.ARGBToPal(ptrARGB.get(), tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
-                           tileWidth, tileHeight) != tileSizeIndexed) {
+        // applying color reduction
+        if (colors.ARGBToPal(ptrARGB.get(), tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
+                             tileWidth, tileHeight) != tileSizeIndexed) {
+          tileData->error = true;
+          tileData->errorMsg.assign("Error while decoding pixels\n");
+          return tileData;
+        }
+        break;
+      }
+      default:
+      {
         tileData->error = true;
-        tileData->errorMsg.assign("Error while decoding pixels\n");
+        tileData->errorMsg.assign("Unknown pixel encoding type\n");
         return tileData;
       }
     }

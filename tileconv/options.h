@@ -37,13 +37,13 @@ public:
   /** Returns the given input filename with the new file extension as specified by type. */
   static std::string SetFileExt(const std::string &fileName, FileType type) noexcept;
 
-  /** Returns the encoding type for the given numeric code. Defaults to Encoding::BC1 */
+  /** Returns the encoding type for the given numeric code. Returns Encoding::UNKNOWN on error. */
   static Encoding GetEncodingType(int code) noexcept;
 
   /** Returns whether the given code includes zlib compressed tiles. */
   static bool IsTileDeflated(int code) noexcept;
 
-  /** Returns the numeric code of the given encoding type. */
+  /** Returns the numeric code of the given encoding type. Returns -1 on error. */
   static unsigned GetEncodingCode(Encoding type, bool deflate) noexcept;
 
   /** Returns a descriptive name of the given encoding type. */
@@ -100,7 +100,7 @@ public:
   void setThreads(int v) noexcept;
   int getThreads() const noexcept;
 
-  /** Specify encoding type. Default: BC1 */
+  /** Specify encoding type. */
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
   Encoding getEncoding() const noexcept { return m_encoding; }
 

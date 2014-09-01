@@ -29,7 +29,7 @@ THE SOFTWARE.
 enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC };
 
 // Supported pixel compression types
-enum class Encoding { RAW, BC1, BC2, BC3 };
+enum class Encoding { UNKNOWN, RAW, BC1, BC2, BC3 };
 
 typedef std::shared_ptr<uint8_t> BytePtr;
 

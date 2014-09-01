@@ -90,7 +90,13 @@ bool Options::init(int argc, char *argv[]) noexcept
       case 't':
         if (i < argc - 1) {
           int type = std::atoi(argv[i+1]);
-          setEncoding(GetEncodingType(type));
+          if (GetEncodingType(type) != Encoding::UNKNOWN) {
+            setEncoding(GetEncodingType(type));
+          } else {
+            std::printf("Unsupported pixel encoding type: %d\n", type);
+            showHelp();
+            return false;
+          }
           i++;    // skip type argument
         } else {
           showHelp();
@@ -366,9 +372,10 @@ Encoding Options::GetEncodingType(int code) noexcept
 {
   switch (code & 0xff) {
     case 0:  return Encoding::RAW;
+    case 1:  return Encoding::BC1;
     case 2:  return Encoding::BC2;
     case 3:  return Encoding::BC3;
-    default: return Encoding::BC1;
+    default: return Encoding::UNKNOWN;
   }
 }
 
@@ -385,9 +392,10 @@ unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
   unsigned retVal = deflate ? 0 : DEFLATE;
   switch (type) {
     case Encoding::RAW: retVal |= 0; break;
+    case Encoding::BC1: retVal |= 1; break;
     case Encoding::BC2: retVal |= 2; break;
     case Encoding::BC3: retVal |= 3; break;
-    default:            retVal |= 1; break;
+    default:            retVal = -1; break;
   }
   return retVal;
 }
