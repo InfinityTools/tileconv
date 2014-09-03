@@ -126,6 +126,8 @@ private:
   static const int          DEF_THREADS;
   static const Encoding     DEF_ENCODING;
 
+  static const char         ParamNames[];
+
   bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
   bool                      m_mosc;         // create MOSC output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC

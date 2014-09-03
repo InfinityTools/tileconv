@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 #include <cstdint>
 #include <cstring>
+#include <unistd.h>
 #include "fileio.h"
 #include "tilethreadpool.h"
 #include "version.h"
@@ -37,6 +38,10 @@ const int Options::DEF_SILENT         = 1;
 const int Options::DEF_QUALITY        = 4;
 const int Options::DEF_THREADS        = 0;    // autodetect
 const Encoding Options::DEF_ENCODING  = Encoding::BC1;
+
+// Supported parameter names
+const char Options::ParamNames[] = "esvt:uo:zdq:j:V";
+
 
 Options::Options() noexcept
 : m_haltOnError(DEF_HALT_ON_ERROR)
@@ -60,24 +65,15 @@ Options::~Options() noexcept
 
 bool Options::init(int argc, char *argv[]) noexcept
 {
-  int i = 1;
   if (argc <= 1) {
     showHelp();
     return false;
-  } else {
-    // loop through the args
-    while (i < argc) {
-      if (argv[i][0] != '-') {
-        break;
-      }
+  }
 
-      if (std::strlen(argv[i]) != 2) {
-        std::printf("Unrecognized argument: %s\n", argv[i]);
-        showHelp();
-        return false;
-      }
-
-      switch (argv[i][1]) {
+  int c = 0;
+  opterr = 0;
+  while ((c = getopt(argc, argv, ParamNames)) != -1) {
+    switch (c) {
       case 'e':
         setHaltOnError(false);
         break;
@@ -88,8 +84,8 @@ bool Options::init(int argc, char *argv[]) noexcept
         setSilence(0);
         break;
       case 't':
-        if (i < argc - 1) {
-          int type = std::atoi(argv[i+1]);
+        if (optarg != nullptr) {
+          int type = std::atoi(optarg);
           if (GetEncodingType(type) != Encoding::UNKNOWN) {
             setEncoding(GetEncodingType(type));
           } else {
@@ -97,18 +93,7 @@ bool Options::init(int argc, char *argv[]) noexcept
             showHelp();
             return false;
           }
-          i++;    // skip type argument
         } else {
-          showHelp();
-          return false;
-        }
-        break;
-      case 'o':
-        if (i < argc - 1) {
-          setOutput(std::string(argv[i+1], MAX_NAME_LENGTH - 1));
-          i++;    // skip outfile argument
-        } else {
-          std::printf("Missing output file for -o\n");
           showHelp();
           return false;
         }
@@ -116,15 +101,11 @@ bool Options::init(int argc, char *argv[]) noexcept
       case 'u':
         setDeflate(false);
         break;
-      case 'd':
-        std::printf("Parameter -d is deprecated. Use -q instead!");
-        break;
-      case 'q':
-        if (i < argc - 1) {
-          int level = std::atoi(argv[i+1]);
-          setQuality(level);
-          i++;    // skip level argument
+      case 'o':
+        if (optarg != nullptr) {
+          setOutput(std::string(optarg, MAX_NAME_LENGTH - 1));
         } else {
+          std::printf("Missing output file for -o\n");
           showHelp();
           return false;
         }
@@ -132,11 +113,22 @@ bool Options::init(int argc, char *argv[]) noexcept
       case 'z':
         setMosc(true);
         break;
+      case 'd':
+        std::printf("Warning: Parameter -d is deprecated. Use -q instead!");
+        break;
+      case 'q':
+        if (optarg != nullptr) {
+          int level = std::atoi(optarg);
+          setQuality(level);
+        } else {
+          showHelp();
+          return false;
+        }
+        break;
       case 'j':
-        if (i < argc - 1) {
-          int jobs = std::atoi(argv[i+1]);
+        if (optarg != nullptr) {
+          int jobs = std::atoi(optarg);
           setThreads(jobs);
-          i++;    // skip jobs argument
         } else {
           showHelp();
           return false;
@@ -146,44 +138,32 @@ bool Options::init(int argc, char *argv[]) noexcept
         std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
         return false;
       default:
-        std::printf("Unrecognized argument \"%s\"\n", argv[i]);
+        std::printf("Unrecognized parameter \"-%c\"\n", optopt);
         showHelp();
         return false;
-      }
-      i++;
     }
   }
 
-  if (i == argc && getInputCount() == 0) {
-    std::printf("No input filename\n");
+  // remaining arguments are assumed to be input filenames
+  for (; optind < argc; optind++) {
+    if (argv[optind][0] == '-') {
+      showHelp();
+      return false;
+    } else if (!addInput(std::string(argv[optind]))) {
+      std::printf("Error opening file \"%s\"\n", argv[optind]);
+      return false;
+    }
+  }
+
+  // checking special conditions
+  if (getInputCount() == 0) {
+    std::printf("No input filename specified\n");
     showHelp();
     return false;
-  }
-
-  if (isOutput()) {
-    // processing a single input file
-    if (i != argc - 1) {
-      std::printf("Cannot use parameter -o with multiple input files\n");
-      showHelp();
-      return false;
-    }
-    if (argv[i][0] == '-') {
-      showHelp();
-      return false;
-    }
-    if (!addInput(std::string(argv[i]))) {
-      std::printf("Error opening file \"%s\"\n", argv[i]);
-      return false;
-    }
-  } else {
-    // processing multiple input files
-    while (i < argc) {
-      if (!addInput(std::string(argv[i]))) {
-        std::printf("Error opening file \"%s\"\n", argv[i]);
-        return false;
-      }
-      i++;
-    }
+  } else if (getInputCount() > 1 && isOutput()) {
+    std::printf("Cannot use parameter -o with multiple input files\n");
+    showHelp();
+    return false;
   }
 
   return true;
