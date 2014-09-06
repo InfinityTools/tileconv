@@ -12,7 +12,7 @@ EXECUTABLE    = tileconv
 
 ifeq ($(OS),Windows_NT)
   EXT         = .exe
-  RM          ?= del
+  RM          = del
   LDFLAGS     += -static
   ifeq ($(USE_WINTHREADS),1)
     CXXFLAGS    += -mwindows -DUSE_WINTHREADS=1
@@ -20,7 +20,7 @@ ifeq ($(OS),Windows_NT)
     LIBS        += -pthread
   endif
 else
-  RM          ?= rm
+  RM          = rm
   LIBS        += -pthread
   ifeq ($(shell uname -s),Darwin)
     # A few hacks to enable proper threading support
