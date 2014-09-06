@@ -23,12 +23,12 @@ THE SOFTWARE.
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
-#include <squish.h>
 #include "funcs.h"
-#include "graphics.h"
 #include "colors.h"
 #include "compress.h"
+#include "dxtsquish.h"
 #include "tilethreadpool.h"
+#include "graphics.h"
 
 
 const char Graphics::HEADER_TIS_SIGNATURE[4]  = {'T', 'I', 'S', ' '};
@@ -51,12 +51,18 @@ const unsigned Graphics::MAX_TILE_SIZE_32            = 64*64*4;
 
 Graphics::Graphics(const Options &options) noexcept
 : m_options(options)
+, m_transcoder(new DxtSquish(DxtBase::ColorFormat::ARGB,
+                             DxtSquish::Dxt1 |
+                             DxtSquish::ColourIterativeClusterFit |
+                             DxtSquish::WeightColourByAlpha))
 {
 }
+
 
 Graphics::~Graphics() noexcept
 {
 }
+
 
 bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) noexcept
 {
@@ -127,16 +133,16 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         if (!getOptions().isSilent()) std::printf("Tile count: %d\n", tileCount);
 
         // converting tiles
-        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         unsigned nextTileIdx = 0;
         double ratioCount = 0.0;    // counts the compression ratios of all tiles
         for (unsigned tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
 
           // writing converted tiles to disk
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-                 (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+                 (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -164,20 +170,14 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
           if (fin.read(tileData->ptrIndexed.get(), 1, tileSizeIndexed) != tileSizeIndexed) {
             return false;
           }
-
-          // Wait until another tile data block can be added to the thread pool
-          while (!pool.canAddTileData()) {
-//            std::this_thread::yield();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          }
-          pool.addTileData(tileData);
+          pool->addTileData(tileData);
         }
 
         // retrieving the remaining tile data blocks in queue
-        while (!pool.finished()) {
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-              (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+        while (!pool->finished()) {
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+              (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -191,8 +191,7 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             ratioCount += ratio;
             nextTileIdx++;
           }
-//          std::this_thread::yield();
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          pool->waitForResult();
         }
 
         if (nextTileIdx < tileCount) {
@@ -268,13 +267,13 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
                       tileCount, compType, Options::GetEncodingName(compType).c_str());
         }
 
-        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         uint32_t nextTileIdx = 0;
         for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           // writing converted tiles to disk
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-                 (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+                 (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -303,20 +302,14 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
           if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {
             return false;
           }
-
-          // Wait until another tile data block can be added to the thread pool
-          while (!pool.canAddTileData()) {
-//            std::this_thread::yield();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          }
-          pool.addTileData(tileData);
+          pool->addTileData(tileData);
         }
 
         // retrieving the remaining tile data blocks in queue
-        while (!pool.finished()) {
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-                 (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+        while (!pool->finished()) {
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+                 (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -328,8 +321,7 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-//          std::this_thread::yield();
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          pool->waitForResult();
         }
 
         if (nextTileIdx < tileCount) {
@@ -384,7 +376,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
           return false;
         }
 
-        if (fin.read(&mosSize, 4, 1) != 1) return false;;
+        if (fin.read(&mosSize, 4, 1) != 1) return false;
         mosSize = get32u(&mosSize);
         if (mosSize < 24) {
           std::printf("MOS size too small\n");
@@ -461,7 +453,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
       inOfs += 2;
 
       tileDim = get32u((uint32_t*)(mosData.get()+inOfs));
-      if (tileDim != 0x40) {    // TODO: expand MBC header to allow non-hardcoded tile dimensions
+      if (tileDim != 0x40) {
         std::printf("Invalid tile dimensions\n");
         return false;
       }
@@ -503,7 +495,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         if (getOptions().isVerbose()) std::printf("Tile count: %d\n", tileCount);
 
         // processing tiles
-        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         unsigned nextTileIdx = 0;
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
         int curIndex = 0;
@@ -518,9 +510,9 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", curIndex);
 
             // writing converted tiles to disk
-            while (pool.hasResult() && pool.peekResult() != nullptr &&
-                   (unsigned)pool.peekResult()->index == nextTileIdx) {
-              TileDataPtr retVal = pool.getResult();
+            while (pool->hasResult() && pool->peekResult() != nullptr &&
+                   (unsigned)pool->peekResult()->index == nextTileIdx) {
+              TileDataPtr retVal = pool->getResult();
               if (retVal == nullptr || retVal->error) {
                 if (retVal != nullptr && !retVal->errorMsg.empty()) {
                   std::printf("%s", retVal->errorMsg.c_str());
@@ -549,21 +541,15 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             v32 = get32u(&v32);
             tileOfs += 4;
             std::memcpy(tileData->ptrIndexed.get(), mosData.get()+dataOfs+v32, tileSizeIndexed);
-
-            // Wait until another tile data block can be added to the thread pool
-            while (!pool.canAddTileData()) {
-//              std::this_thread::yield();
-              std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            pool.addTileData(tileData);
+            pool->addTileData(tileData);
           }
         }
 
         // retrieving the remaining tile data blocks in queue
-        while (!pool.finished()) {
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-                 (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+        while (!pool->finished()) {
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+                 (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -577,8 +563,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             ratioCount += ratio;
             nextTileIdx++;
           }
-//          std::this_thread::yield();
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          pool->waitForResult();
         }
 
         if (nextTileIdx < tileCount) {
@@ -656,9 +641,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
 
         // writing MOS header
         uint32_t headerOfs = 0;
-        std::memcpy(mosData.get()+headerOfs, HEADER_MOS_SIGNATURE, sizeof(HEADER_MOS_SIGNATURE));
+        std::memcpy(mosData.get()+headerOfs, HEADER_MOS_SIGNATURE, 4);
         headerOfs += 4;
-        std::memcpy(mosData.get()+headerOfs, HEADER_VERSION_V1, sizeof(HEADER_VERSION_V1));
+        std::memcpy(mosData.get()+headerOfs, HEADER_VERSION_V1, 4);
         headerOfs += 4;
         v16 = mosWidth; v16 = get16u(&v16);
         std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos width
@@ -684,7 +669,7 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
                       mosWidth, mosHeight, mosCols, mosRows, compType, Options::GetEncodingName(compType).c_str());
         }
 
-        TileThreadPool pool(*this, getOptions().getThreads(), 64);
+        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         uint32_t tileCount = mosCols * mosRows;
         uint32_t nextTileIdx = 0;
         int curIndex = 0;                       // the current tile index
@@ -693,9 +678,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             if (getOptions().isVerbose()) std::printf("Decoding tile #%d\n", curIndex);
 
             // writing converted tiles to disk
-            while (pool.hasResult() && pool.peekResult() != nullptr &&
-                   (unsigned)pool.peekResult()->index == nextTileIdx) {
-              TileDataPtr retVal = pool.getResult();
+            while (pool->hasResult() && pool->peekResult() != nullptr &&
+                   (unsigned)pool->peekResult()->index == nextTileIdx) {
+              TileDataPtr retVal = pool->getResult();
               if (retVal == nullptr || retVal->error) {
                 if (retVal != nullptr && !retVal->errorMsg.empty()) {
                   std::printf("%s", retVal->errorMsg.c_str());
@@ -724,21 +709,15 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             if (fin.read(tileData->ptrDeflated.get(), 1, chunkSize) != chunkSize) {
               return false;
             }
-
-            // Wait until another tile data block can be added to the thread pool
-            while (!pool.canAddTileData()) {
-//              std::this_thread::yield();
-              std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            pool.addTileData(tileData);
+            pool->addTileData(tileData);
           }
         }
 
         // retrieving the remaining tile data blocks in queue
-        while (!pool.finished()) {
-          while (pool.hasResult() && pool.peekResult() != nullptr &&
-                 (unsigned)pool.peekResult()->index == nextTileIdx) {
-            TileDataPtr retVal = pool.getResult();
+        while (!pool->finished()) {
+          while (pool->hasResult() && pool->peekResult() != nullptr &&
+                 (unsigned)pool->peekResult()->index == nextTileIdx) {
+            TileDataPtr retVal = pool->getResult();
             if (retVal == nullptr || retVal->error) {
               if (retVal != nullptr && !retVal->errorMsg.empty()) {
                 std::printf("%s", retVal->errorMsg.c_str());
@@ -750,8 +729,7 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-//          std::this_thread::yield();
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          pool->waitForResult();
         }
 
         if (nextTileIdx < tileCount) {
@@ -766,9 +744,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
           BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
 
           // writing MOSC header
-          std::memcpy(moscData.get(), HEADER_MOSC_SIGNATURE, sizeof(HEADER_MOSC_SIGNATURE));
-          std::memcpy(moscData.get()+4, HEADER_VERSION_V1, sizeof(HEADER_VERSION_V1));
-          v32 = mosSize; v32 = get32u(&v32);
+          std::memcpy(moscData.get(), HEADER_MOSC_SIGNATURE, 4);
+          std::memcpy(moscData.get()+4, HEADER_VERSION_V1, 4);
+          v32 = get32u(&mosSize);
           std::memcpy(moscData.get()+8, &v32, 4);
 
           // compressing data
@@ -864,7 +842,7 @@ bool Graphics::writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32
       palOfs += PALETTE_SIZE;
 
       // writing tile offsets
-      uint32_t v32 = dataOfsRel; v32 = get32u(&v32);
+      uint32_t v32 = get32u(&dataOfsRel);
       std::memcpy(mosData.get()+tileOfs, &v32, 4);
       tileOfs += 4;
 
@@ -892,43 +870,31 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
       tileData->tileWidth > 0 && tileData->tileHeight > 0) {
     BytePtr  ptrEncoded(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
     uint16_t v16;                   // temp. variable (16-bit)
-    uint32_t tileWidthPadded;       // tile width expanded to a multiple of 4
-    uint32_t tileHeightPadded;      // tile height expanded to a multiple of 4
     uint32_t tileSizeEncoded;       // pixel encoded size of the tile
-    int      squishFlags = squish::kColourIterativeClusterFit;
     Colors   colors(getOptions());
 
     tileData->size = 0;
 
     switch (getOptions().getEncoding()) {
       case Encoding::RAW:
-        tileWidthPadded = tileData->tileWidth;
-        tileHeightPadded = tileData->tileHeight;
-        tileSizeEncoded = tileWidthPadded*tileHeightPadded + PALETTE_SIZE;
+        tileSizeEncoded = tileData->tileWidth*tileData->tileHeight + PALETTE_SIZE;
         break;
       case Encoding::BC2:
-        tileWidthPadded = colors.getPaddedValue(tileData->tileWidth);
-        tileHeightPadded = colors.getPaddedValue(tileData->tileHeight);
-        squishFlags |= squish::kDxt3;
-        tileSizeEncoded = squish::GetStorageRequirements(tileWidthPadded, tileHeightPadded, squishFlags);
+        getTranscoder()->setDxt3();
+        tileSizeEncoded = getTranscoder()->getRequiredSpace(tileData->tileWidth, tileData->tileHeight);
         break;
       case Encoding::BC3:
-        tileWidthPadded = colors.getPaddedValue(tileData->tileWidth);
-        tileHeightPadded = colors.getPaddedValue(tileData->tileHeight);
-        squishFlags |= squish::kDxt5;
-        tileSizeEncoded = squish::GetStorageRequirements(tileWidthPadded, tileHeightPadded, squishFlags);
+        getTranscoder()->setDxt5();
+        tileSizeEncoded = getTranscoder()->getRequiredSpace(tileData->tileWidth, tileData->tileHeight);
         break;
       default:    // default is BC1
-        tileWidthPadded = colors.getPaddedValue(tileData->tileWidth);
-        tileHeightPadded = colors.getPaddedValue(tileData->tileHeight);
-        squishFlags |= squish::kDxt1;
-        tileSizeEncoded = squish::GetStorageRequirements(tileWidthPadded, tileHeightPadded, squishFlags);
+        getTranscoder()->setDxt1();
+        tileSizeEncoded = getTranscoder()->getRequiredSpace(tileData->tileWidth, tileData->tileHeight);
         break;
     }
     uint32_t tileSizePixels = tileData->tileWidth * tileData->tileHeight;
-    uint32_t tileSizePixelsPadded = tileWidthPadded*tileHeightPadded;
 
-    // padding tile (if needed) and applying pixel encodings
+    // applying pixel encodings
     switch (getOptions().getEncoding()) {
       case Encoding::RAW:
       {
@@ -950,7 +916,6 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
       case Encoding::BC3:
       {
         BytePtr ptrARGB(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
-        BytePtr ptrARGB2(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
 
         // converting tile to ARGB
         if (colors.palToARGB(tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
@@ -959,21 +924,6 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
           tileData->errorMsg.assign("Error during color space conversion\n");
           return tileData;
         }
-        // padding tile if needed
-        if (colors.padBlock(ptrARGB.get(), ptrARGB2.get(), tileData->tileWidth, tileData->tileHeight,
-                            tileWidthPadded, tileHeightPadded) != tileSizePixelsPadded) {
-          tileData->error = true;
-          tileData->errorMsg.assign("Error while encoding pixels\n");
-          return tileData;
-        }
-        // preparing correct color components order
-        if (colors.reorderColors(ptrARGB2.get(), tileSizePixelsPadded,
-                                 Colors::FMT_ARGB, Colors::FMT_ABGR) < tileSizePixelsPadded) {
-          tileData->error = true;
-          tileData->errorMsg.assign("Error while encoding pixels\n");
-          return tileData;
-        }
-        uint8_t *argbPtr = ptrARGB2.get();
         uint8_t *encodedPtr = ptrEncoded.get();
         // setting tile header
         v16 = (uint16_t)tileData->tileWidth; v16 = get16u(&v16);  // tile width in ready-to-write format
@@ -981,7 +931,11 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
         v16 = (uint16_t)tileData->tileHeight; v16 = get16u(&v16); // tile height in ready-to-write format
         std::memcpy(encodedPtr, &v16, 2); encodedPtr += 2;        // setting tile height
         // encoding pixel data
-        squish::CompressImage(argbPtr, tileWidthPadded, tileHeightPadded, encodedPtr, squishFlags);
+//        std::printf("Debug: Graphics::encodeTile() calling getTranscoder()->compressImage(0x%08x, 0x%08x, %d, %d, 0x%04x)\n",
+//                    (unsigned)((size_t)ptrARGB.get()), (unsigned)((size_t)encodedPtr),
+//                    tileData->tileWidth, tileData->tileHeight, getTranscoder()->getFlags());
+        getTranscoder()->compressImage(ptrARGB.get(), encodedPtr, tileData->tileWidth, tileData->tileHeight);
+//        std::printf("Debug: Graphics::encodeTile() finished executing squish::CompressImage()\n");
         break;
       }
       default:
@@ -1020,7 +974,6 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
       tileData->ptrIndexed != nullptr && tileData->ptrPalette != nullptr &&
       tileData->ptrDeflated != nullptr && tileData->index >= 0 && tileData->size > 0) {
     BytePtr  ptrARGB(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
-    BytePtr  ptrARGB2(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
     BytePtr  ptrEncoded(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
     uint16_t v16;
     uint32_t tileWidth, tileHeight;
@@ -1049,9 +1002,6 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
     tileData->tileHeight = tileHeight;
     tileSizeIndexed = tileWidth*tileHeight;
 
-    uint32_t tileWidthPadded = colors.getPaddedValue(tileWidth);
-    uint32_t tileHeightPadded = colors.getPaddedValue(tileHeight);
-
     // decoding pixel compression
     switch (Options::GetEncodingType(tileData->encodingType)) {
       case Encoding::RAW:
@@ -1067,31 +1017,14 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
       case Encoding::BC3:
       {
         // decoding BCx pixel data
-        int squishFlags;
         switch (Options::GetEncodingType(tileData->encodingType)) {
-          case Encoding::BC2: squishFlags = squish::kDxt3; break;
-          case Encoding::BC3: squishFlags = squish::kDxt5; break;
-          default:            squishFlags = squish::kDxt1; break;
+          case Encoding::BC2: getTranscoder()->setDxt3(); break;
+          case Encoding::BC3: getTranscoder()->setDxt5(); break;
+          default:            getTranscoder()->setDxt1(); break;
         }
         // decoding pixel data
-        squish::DecompressImage(ptrARGB2.get(), tileWidthPadded, tileHeightPadded,
-                                ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE, squishFlags);
-        // fixing color orders
-        uint32_t tileSizeARGB = tileWidthPadded*tileHeightPadded;
-        if (colors.reorderColors(ptrARGB2.get(), tileSizeARGB,
-                                 Colors::FMT_ABGR, Colors::FMT_ARGB) < tileSizeARGB) {
-          tileData->error = true;
-          tileData->errorMsg.assign("Error while decoding pixels\n");
-          return tileData;
-        }
-        // unpadding tile block
-        if (colors.unpadBlock(ptrARGB2.get(), ptrARGB.get(), tileWidthPadded,
-                              tileHeightPadded, tileWidth, tileHeight) != tileSizeIndexed) {
-          tileData->error = true;
-          tileData->errorMsg.assign("Error while decoding pixels\n");
-          return tileData;
-        }
-
+        getTranscoder()->decompressImage(ptrEncoded.get()+HEADER_TILE_ENCODED_SIZE,
+                                         ptrARGB.get(), tileWidth, tileHeight);
         // applying color reduction
         if (colors.ARGBToPal(ptrARGB.get(), tileData->ptrIndexed.get(), tileData->ptrPalette.get(),
                              tileWidth, tileHeight) != tileSizeIndexed) {

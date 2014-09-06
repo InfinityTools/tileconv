@@ -19,37 +19,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include <algorithm>
+#ifndef USE_WINTHREADS
 #include "graphics.h"
-#include "tilethreadpool.h"
+#include "tilethreadpool_posix.h"
 
 
-const unsigned TileThreadPool::MAX_THREADS = 256u;
-const unsigned TileThreadPool::AUTO_THREADS = std::max(1u, std::min(MAX_THREADS, std::thread::hardware_concurrency()));
-const unsigned TileThreadPool::MAX_TILES = std::numeric_limits<int>::max();
+unsigned getThreadPoolAutoThreads()
+{
+  return std::max(1u, std::min(TileThreadPool::MAX_THREADS, std::thread::hardware_concurrency()));
+}
 
 
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned threadNum, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
-, m_maxTiles(MAX_TILES)
+ThreadPoolPtr createThreadPool(Graphics &gfx, int threadNum, int tileNum)
+{
+  return ThreadPoolPtr(new TileThreadPoolPosix(gfx, threadNum, tileNum));
+}
+
+
+TileThreadPoolPosix::TileThreadPoolPosix(Graphics &gfx, unsigned threadNum, unsigned tileNum) noexcept
+: TileThreadPool(gfx, tileNum)
 , m_activeThreads(0)
+, m_mainThread(std::this_thread::get_id())
 , m_activeMutex()
 , m_tilesMutex()
 , m_resultsMutex()
-, m_tiles()
 , m_threads()
-, m_results()
 {
-  setMaxTiles(tileNum);
   threadNum = std::max(1u, std::min(MAX_THREADS, threadNum));
   for (unsigned i = 0; i < threadNum; i++) {
-    m_threads.emplace_back(std::thread(&TileThreadPool::threadMain, this));
+    m_threads.emplace_back(std::thread(&TileThreadPoolPosix::threadMain, this));
   }
 }
 
 
-TileThreadPool::~TileThreadPool() noexcept
+TileThreadPoolPosix::~TileThreadPoolPosix() noexcept
 {
   setTerminate(true);
   for (auto iter = m_threads.begin(); iter != m_threads.end(); ++iter) {
@@ -58,25 +61,23 @@ TileThreadPool::~TileThreadPool() noexcept
 }
 
 
-
-
-bool TileThreadPool::addTileData(TileDataPtr tileData) noexcept
+void TileThreadPoolPosix::addTileData(TileDataPtr tileData) noexcept
 {
-  std::lock_guard<std::mutex> lock(m_tilesMutex);
-  if (m_tiles.size() < getMaxTiles()) {
-    m_tiles.push(tileData);
-    return true;
+  while (!canAddTileData()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
-  return false;
+
+  std::lock_guard<std::mutex> lock(m_tilesMutex);
+  getTileQueue().emplace(tileData);
 }
 
 
-TileDataPtr TileThreadPool::getResult() noexcept
+TileDataPtr TileThreadPoolPosix::getResult() noexcept
 {
   std::lock_guard<std::mutex> lock(m_resultsMutex);
-  if (!m_results.empty()) {
-    TileDataPtr retVal = m_results.top();
-    m_results.pop();
+  if (!getResultQueue().empty()) {
+    TileDataPtr retVal = getResultQueue().top();
+    getResultQueue().pop();
     return retVal;
   } else {
     return TileDataPtr(nullptr);
@@ -84,81 +85,84 @@ TileDataPtr TileThreadPool::getResult() noexcept
 }
 
 
-const TileDataPtr TileThreadPool::peekResult() noexcept
+const TileDataPtr TileThreadPoolPosix::peekResult() noexcept
 {
   std::lock_guard<std::mutex> lock(m_resultsMutex);
-  if (!m_results.empty()) {
-    return m_results.top();
+  if (!getResultQueue().empty()) {
+    return getResultQueue().top();
   } else {
     return TileDataPtr(nullptr);
   }
 }
 
 
-bool TileThreadPool::finished() noexcept
+void TileThreadPoolPosix::waitForResult() noexcept
+{
+  while (!hasResult() && !finished()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+}
+
+
+bool TileThreadPoolPosix::finished() noexcept
 {
   std::unique_lock<std::mutex> lock1(m_tilesMutex, std::defer_lock);
   std::unique_lock<std::mutex> lock2(m_activeMutex, std::defer_lock);
   std::unique_lock<std::mutex> lock3(m_resultsMutex, std::defer_lock);
   std::lock(lock1, lock2, lock3);
-  bool retVal = (m_tiles.empty() && m_activeThreads == 0 && m_results.empty());
+  bool retVal = (getTileQueue().empty() && getActiveThreads() == 0 && getResultQueue().empty());
   lock1.unlock(); lock2.unlock(); lock3.unlock();
   return retVal;
 }
 
 
-void TileThreadPool::threadMain() noexcept
+void TileThreadPoolPosix::threadMain() noexcept
 {
   std::unique_lock<std::mutex> lockTiles(m_tilesMutex, std::defer_lock);
   std::unique_lock<std::mutex> lockResults(m_resultsMutex, std::defer_lock);
   while (!terminate()) {
     lockTiles.lock();
-    if (!m_tiles.empty()) {
+    if (!getTileQueue().empty()) {
       threadActivated();
 
-      TileDataPtr tileData = m_tiles.front();
-      m_tiles.pop();
+      TileDataPtr tileData = getTileQueue().front();
+      getTileQueue().pop();
       lockTiles.unlock();
       if (tileData != nullptr) {
         // executing encoding/decoding methods
         if (tileData->isEncoding) {
-          try {
-            tileData = m_gfx.encodeTile(tileData);
-          } catch (...) {
-            tileData = TileDataPtr(nullptr);
-          }
+          tileData = getGraphics().encodeTile(tileData);
         } else {
-          try {
-            tileData = m_gfx.decodeTile(tileData);
-          } catch (...) {
-            tileData = TileDataPtr(nullptr);
-          }
+          tileData = getGraphics().decodeTile(tileData);
         }
       }
 
       // storing results
       lockResults.lock();
-      m_results.push(tileData);
+      getResultQueue().push(tileData);
       lockResults.unlock();
 
       threadDeactivated();
     } else {
       lockTiles.unlock();
-      std::this_thread::yield();
+//      std::this_thread::yield();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
   }
 }
 
 
-void TileThreadPool::threadActivated() noexcept
+void TileThreadPoolPosix::threadActivated() noexcept
 {
   std::lock_guard<std::mutex> lock(m_activeMutex);
   m_activeThreads++;
 }
 
 
-void TileThreadPool::threadDeactivated() noexcept
+void TileThreadPoolPosix::threadDeactivated() noexcept
 {
   std::lock_guard<std::mutex> lock(m_activeMutex);
   m_activeThreads--;
 }
+
+#endif    // USE_WINTHREADS

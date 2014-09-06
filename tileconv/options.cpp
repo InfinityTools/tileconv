@@ -34,19 +34,21 @@ const int Options::DEFLATE            = 256;
 const bool Options::DEF_HALT_ON_ERROR = true;
 const bool Options::DEF_MOSC          = false;
 const bool Options::DEF_DEFLATE       = true;
+const bool Options::DEF_SHOWINFO      = false;
 const int Options::DEF_SILENT         = 1;
 const int Options::DEF_QUALITY        = 4;
 const int Options::DEF_THREADS        = 0;    // autodetect
 const Encoding Options::DEF_ENCODING  = Encoding::BC1;
 
 // Supported parameter names
-const char Options::ParamNames[] = "esvt:uo:zdq:j:V";
+const char Options::ParamNames[] = "esvt:uo:zdq:j:IV";
 
 
 Options::Options() noexcept
 : m_haltOnError(DEF_HALT_ON_ERROR)
 , m_mosc(DEF_MOSC)
 , m_deflate(DEF_DEFLATE)
+, m_showInfo(DEF_SHOWINFO)
 , m_silent(DEF_SILENT)
 , m_quality(DEF_QUALITY)
 , m_threads(DEF_THREADS)
@@ -134,6 +136,9 @@ bool Options::init(int argc, char *argv[]) noexcept
           return false;
         }
         break;
+      case 'I':
+        setShowInfo(true);
+        break;
       case 'V':
         std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
         return false;
@@ -196,6 +201,7 @@ void Options::showHelp() noexcept
   std::printf("                Additional techniques: levels 4 to 9\n");
   std::printf("  -j num      Number of parallel jobs to speed up the conversion process.\n");
   std::printf("              Valid numbers: 0 (autodetect), 1..%d (Default: 0)\n", TileThreadPool::MAX_THREADS);
+  std::printf("  -I          Show file information and exit.\n");
   std::printf("  -V          Print version number and exit.\n\n");
   std::printf("Supported input file types: TIS, MOS, TBC, MBC\n");
   std::printf("Note: You can mix and match input files of each supported type.\n\n");
@@ -276,7 +282,7 @@ void Options::setThreads(int  v) noexcept
 
 int Options::getThreads() const noexcept
 {
-  return m_threads ? m_threads : TileThreadPool::AUTO_THREADS;
+  return m_threads ? m_threads : getThreadPoolAutoThreads();
 }
 
 
@@ -450,7 +456,7 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
     if (!sum.empty()) sum += ", ";
     sum += "jobs = ";
     if (m_threads == 0) {
-      sum += "autodetected (" + std::to_string(TileThreadPool::AUTO_THREADS) + ")";
+      sum += "autodetected (" + std::to_string(getThreadPoolAutoThreads()) + ")";
     } else {
       sum += std::to_string(m_threads);
     }

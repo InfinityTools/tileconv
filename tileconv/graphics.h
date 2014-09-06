@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include "options.h"
 #include "fileio.h"
 #include "tiledata.h"
+#include "dxtbase.h"
 
 
 /** Provides functions for converting between TIS/MOS <-> TBC/MBC */
@@ -47,16 +48,8 @@ public:
   /** Read-only access to Options structure. */
   const Options& getOptions() const noexcept { return m_options; }
 
-private:
-  /** Called by tisToTBC() and mosToMBC() to write an encoded tile to the output file */
-  bool writeEncodedTile(TileDataPtr tileData, File &file, double &ratio) noexcept;
-
-  /** Called by tbcToTIS() to write a decoded tile to the output file */
-  bool writeDecodedTisTile(TileDataPtr tileData, File &file) noexcept;
-
-  /** Called by mbcToMOS() to write a decoded tile to the output file */
-  bool writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32_t &palOfs,
-                           uint32_t &tileOfs, uint32_t &dataOfsRel, uint32_t dataOfsBase) noexcept;
+  /** Access to DXTn transcoder. */
+  DxtPtr& getTranscoder() noexcept { return m_transcoder; }
 
   /** Encodes a single tile. Returns success state. */
   TileDataPtr encodeTile(TileDataPtr tileData) noexcept;
@@ -65,6 +58,20 @@ private:
   TileDataPtr decodeTile(TileDataPtr tileData) noexcept;
 
 private:
+  // Called by tisToTBC() and mosToMBC() to write an encoded tile to the output file
+  bool writeEncodedTile(TileDataPtr tileData, File &file, double &ratio) noexcept;
+
+  // Called by tbcToTIS() to write a decoded tile to the output file
+  bool writeDecodedTisTile(TileDataPtr tileData, File &file) noexcept;
+
+  /// Called by mbcToMOS() to write a decoded tile to the output file
+  bool writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32_t &palOfs,
+                           uint32_t &tileOfs, uint32_t &dataOfsRel, uint32_t dataOfsBase) noexcept;
+
+  // Compresses an RGBA image into BCn encoded data. width and height must be a multiple of 4!
+  void compressImage(const uint8_t *src, int width, int height, uint8_t *dst, int flags) noexcept;
+
+public:
   static const char HEADER_TIS_SIGNATURE[4];          // TIS signature
   static const char HEADER_MOS_SIGNATURE[4];          // MOS signature
   static const char HEADER_MOSC_SIGNATURE[4];         // MOSC signature
@@ -78,13 +85,13 @@ private:
   static const unsigned HEADER_TILE_ENCODED_SIZE;     // header size for a raw/BCx encoded tile
   static const unsigned HEADER_TILE_COMPRESSED_SIZE;  // header size for a zlib compressed tile
 
+private:
   static const unsigned PALETTE_SIZE;                 // palette size in bytes
   static const unsigned MAX_TILE_SIZE_8;              // max. size (in bytes) of a 8-bit pixels tile
   static const unsigned MAX_TILE_SIZE_32;             // max. size (in bytes) of a 32-bit pixels tile
 
   const Options&  m_options;
-
-  friend class TileThreadPool;
+  DxtPtr          m_transcoder;
 };
 
 

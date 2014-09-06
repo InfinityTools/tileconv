@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 #include <limits>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include "colors.h"
 #include "colorquant.h"
@@ -66,6 +67,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
     ColorQuant quant;
     if (!quant.setSource(src, width, height)) return 0;
     if (!quant.setTarget(dst, size)) return 0;
+    std::memset(palette, 0, 1024);
     if (!quant.setPalette(palette, 1024)) return 0;
     quant.setSpeed(10 - getOptions().getQuality());   // speed is defined as "10 - quality"
 

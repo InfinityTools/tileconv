@@ -19,14 +19,38 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef _TILETHREADPOOL_H_
-#define _TILETHREADPOOL_H_
-
-#ifdef USE_WINTHREADS
-  #include "tilethreadpool_win32.h"
-#else
-  #include "tilethreadpool_posix.h"
-#endif
+#include <algorithm>
+#include "tilethreadpool_base.h"
 
 
-#endif		// _TILETHREADPOOL_H_
+const unsigned TileThreadPool::MAX_THREADS  = 256u;
+const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
+
+
+TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
+: m_gfx(gfx)
+, m_terminate(false)
+, m_maxTiles(MAX_TILES)
+//, m_activeThreads(0)
+, m_tiles()
+, m_results()
+{
+  setMaxTiles(tileNum);
+}
+
+
+TileThreadPool::~TileThreadPool() noexcept
+{
+}
+
+
+void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
+{
+  m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
+}
+
+
+Graphics& TileThreadPool::getGraphics() noexcept { return m_gfx; }
+
+
+const Graphics& TileThreadPool::getGraphics() const noexcept { return m_gfx; }

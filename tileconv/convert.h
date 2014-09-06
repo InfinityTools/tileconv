@@ -47,6 +47,10 @@ public:
   const Options& getOptions() const noexcept { return m_options; }
 
 private:
+  // Display information about the specified filename
+  bool showInfo(const std::string &fileName) noexcept;
+
+private:
   Options   m_options;
 };
 

@@ -21,7 +21,6 @@ THE SOFTWARE.
 */
 #ifndef COLORS_H
 #define COLORS_H
-
 #include <unordered_map>
 #include "options.h"
 

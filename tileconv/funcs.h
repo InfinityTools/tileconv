@@ -27,13 +27,21 @@ THE SOFTWARE.
 #if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
 static inline uint16_t get16u(const uint16_t *ptr, int idx = 0) { return static_cast<uint16_t>(reinterpret_cast<const uint8_t*>(&ptr[idx])[0]) << 8 | reinterpret_cast<const uint8_t*>(&ptr[idx])[1]; }
 static inline int16_t get16s(const int16_t *ptr, int idx = 0) { return static_cast<int16_t>(reinterpret_cast<const uint8_t*>(&ptr[idx])[0]) << 8 | reinterpret_cast<const uint8_t*>(&ptr[idx])[1]; }
+
 static inline uint32_t get32u(const uint32_t *ptr, int idx = 0) { return (static_cast<uint32_t>(get16u(reinterpret_cast<const uint16_t*>(&ptr[idx]), 0)) << 16) | get16u(reinterpret_cast<const uint16_t*>(&ptr[idx]), 1); }
 static inline int32_t get32s(const int32_t *ptr, int idx = 0) { return (static_cast<int32_t>(get16s(reinterpret_cast<const int16_t*>(&ptr[idx]), 0)) << 16) | get16u(reinterpret_cast<const uint16_t*>(&ptr[idx]), 1); }
+
+static inline uint64_t get64u(const uint32_t *ptr, int idx = 0) { return (static_cast<uint64_t>(get32u(reinterpret_cast<const uint32_t*>(&ptr[idx]), 0)) << 32) | get32u(reinterpret_cast<const uint32_t*>(&ptr[idx]), 1); }
+static inline int64_t get64s(const int32_t *ptr, int idx = 0) { return (static_cast<int64_t>(get32s(reinterpret_cast<const int32_t*>(&ptr[idx]), 0)) << 32) | get32u(reinterpret_cast<const uint32_t*>(&ptr[idx]), 1); }
 #else
 static inline uint16_t get16u(const uint16_t *ptr, int idx = 0) { return ptr[idx]; }
 static inline int16_t get16s(const int16_t *ptr, int idx = 0) { return ptr[idx]; }
+
 static inline uint32_t get32u(const uint32_t *ptr, int idx = 0) { return ptr[idx]; }
 static inline int32_t get32s(const int32_t *ptr, int idx = 0) { return ptr[idx]; }
+
+static inline uint64_t get64u(const uint64_t *ptr, int idx = 0) { return ptr[idx]; }
+static inline int64_t get64s(const int64_t *ptr, int idx = 0) { return ptr[idx]; }
 #endif
 
 

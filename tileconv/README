@@ -46,6 +46,7 @@ Options:
                 Additional techniques: levels 4 to 9
   -j num      Number of parallel jobs to speed up the conversion process.
               Valid numbers: 0 (autodetect), 1..256 (Default: 0)
+  -I          Show file information and exit.
   -V          Print version number and exit.
 
 Supported input file types: TIS, MOS, TBC, MBC
@@ -65,8 +66,8 @@ BUILDING TILECONV
 
 Dependencies:
 - zlib (http://www.zlib.net/)
-- libsquish (https://code.google.com/p/libsquish/)
 - pngquant (https://github.com/pornel/pngquant/)
+- libsquish (https://code.google.com/p/libsquish/)
 
 External libraries and include files are assumed to be located in the 
 subfolders "zlib", "squish" and "pngquant". The libraries are providing their 

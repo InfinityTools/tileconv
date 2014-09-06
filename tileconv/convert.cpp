@@ -20,8 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include <cstdio>
+#include <cstring>
 #include "version.h"
+#include "funcs.h"
 #include "fileio.h"
+#include "compress.h"
 #include "graphics.h"
 #include "convert.h"
 
@@ -53,6 +56,17 @@ bool Convert::execute() noexcept
 {
   // checking state
   if (getOptions().getInputCount() == 0) return false;
+
+  // Special case: show information of input files only
+  if (getOptions().isShowInfo()) {
+    for (int i = 0; i < getOptions().getInputCount(); i++) {
+      showInfo(getOptions().getInput(i));
+      std::printf("\n");
+    }
+    return true;
+  }
+
+  // Starting the actual conversion process
   if (!getOptions().isSilent()) {
     std::printf("Options: %s\n", getOptions().getOptionsSummary(true).c_str());
   }
@@ -200,3 +214,164 @@ bool Convert::execute() noexcept
   return retVal;
 }
 
+
+bool Convert::showInfo(const std::string &fileName) noexcept
+{
+  if (!fileName.empty()) {
+    std::printf("Parsing \"%s\"...\n", fileName.c_str());
+    File f(fileName.c_str(), "rb");
+    if (!f.error()) {
+      char sig[4], ver[4];
+
+      if (f.read(sig, 1, 4) != 4) return false;
+      if (std::strncmp(sig, Graphics::HEADER_TIS_SIGNATURE, 4) == 0) {
+        uint32_t tileNum, tileSize;
+        // Parsing TIS file
+        if (f.read(ver, 1, 4) != 4) return false;
+        if (std::strncmp(ver, Graphics::HEADER_VERSION_V1, 4) != 0) {
+          std::printf("Invalid TIS version.\n");
+          return false;
+        }
+        if (f.read(&tileNum, 4, 1) != 1) return false;
+        tileNum = get32u(&tileNum);
+        if (f.read(&tileSize, 4, 1) != 1) return false;
+        tileSize = get32u(&tileSize);
+
+        // Displaying TIS stats
+        std::printf("File type:       TIS\n");
+        switch (tileSize) {
+          case 0x1400: std::printf("File subtype:    Paletted\n"); break;
+          case 0x000c: std::printf("File subtype:    PVRZ-based\n"); break;
+          default:     std::printf("File subtype:    Unknown\n"); break;
+        }
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else if (std::strncmp(sig, Graphics::HEADER_MOS_SIGNATURE, 4) == 0 ||
+                 std::strncmp(sig, Graphics::HEADER_MOSC_SIGNATURE, 4) == 0) {
+        // Parsing MOS or MOSC file
+        BytePtr mosData(nullptr, std::default_delete<uint8_t[]>());
+        bool isMosc = true;
+        uint32_t mosSize;
+        uint16_t width, height, cols, rows;
+        if (f.read(ver, 1, 4) != 4) return false;
+
+        if (std::strncmp(sig, Graphics::HEADER_MOSC_SIGNATURE, 4) == 0) {
+          // decode MOSC into memory
+          uint32_t moscSize;
+          Compression compression;
+          isMosc = true;
+
+          // getting MOSC file size
+          f.seek(0, SEEK_END);
+          moscSize = f.tell();
+          if (moscSize <= 12) {
+            std::printf("Invalid MOSC size\n");
+            return false;
+          }
+          moscSize -= 12;    // removing header size
+          f.seek(4, SEEK_SET);
+          if (f.read(&ver, 1, 4) != 4) return false;
+          if (std::strncmp(ver, Graphics::HEADER_VERSION_V1, 4) != 0) {
+            std::printf("Invalid MOSC version.\n");
+            return false;
+          }
+          if (f.read(&mosSize, 4, 1) != 1) return false;
+          mosSize = get32u(&mosSize);
+          if (mosSize < 24) {
+            std::printf("MOS size too small.\n");
+            return false;
+          }
+          // loading and decompressing MOS data
+          BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
+          if (f.read(moscData.get(), 1, moscSize) < moscSize) {
+            std::printf("Incomplete or corrupted MOSC file.\n");
+            return false;
+          }
+          mosData.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
+          uint32_t size = compression.inflate(moscData.get(), moscSize, mosData.get(), mosSize);
+          if (size != mosSize) {
+            std::printf("Error while decompressing MOSC input file.\n");
+            return false;
+          }
+        } else {
+          // reading MOS header into memory
+          f.seek(0, SEEK_END);
+          mosSize = f.tell();
+          if (mosSize < 24) {
+            std::printf("MOS size too small\n");
+            return false;
+          }
+          f.seek(0, SEEK_SET);
+          mosData.reset(new uint8_t[24], std::default_delete<uint8_t[]>());
+          if (f.read(mosData.get(), 1, 24) != 24) return false;
+        }
+
+        std::memcpy(ver, mosData.get()+0x04, 4);
+        std::memcpy(&width, mosData.get()+0x08, 2);
+        std::memcpy(&height, mosData.get()+0x0a, 2);
+        std::memcpy(&cols, mosData.get()+0x0c, 2);
+        std::memcpy(&rows, mosData.get()+0x0e, 2);
+
+        // Displaying TIS stats
+        std::printf("File type:       MOS (%s)\n", isMosc ? "compressed" : "uncompressed");
+        if (std::strncmp(ver, "V1  ", 4) == 0) {
+          std::printf("File subtype:    Paletted (V1)\n");
+        } else if (std::strncmp(ver, "V2  ", 4) == 0) {
+          std::printf("File subtype:    PVRZ-based (V2)\n");
+        } else {
+          std::printf("File version:    Unknown\n");
+        }
+        std::printf("Width:           %d\n", width);
+        std::printf("Height:          %d\n", height);
+        std::printf("Columns:         %d\n", cols);
+        std::printf("Rows:            %d\n", rows);
+      } else if (std::strncmp(sig, Graphics::HEADER_TBC_SIGNATURE, 4) == 0) {
+        // Parsing TBC file
+        uint32_t compType, tileNum;
+        if (f.read(ver, 1, 4) != 4) return false;
+        if (std::strncmp(ver, Graphics::HEADER_VERSION_V1_0, 4) != 0) {
+          std::printf("Invalid or unsupported TBC version.\n");
+          return false;
+        }
+        if (f.read(&compType, 4, 1) != 1) return false;
+        compType = get32u(&compType);
+        if (f.read(&tileNum, 4, 1) != 1) return false;
+        tileNum = get32u(&tileNum);
+
+        // Displaying TBC stats
+        std::printf("File type:       TBC\n");
+        std::printf("TBC version:     1.0\n");
+        std::printf("Compression:     0x%04x - %s\n", compType, Options::GetEncodingName(compType).c_str());
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else if (std::strncmp(sig, Graphics::HEADER_MBC_SIGNATURE, 4) == 0) {
+        // Parsing MBC file
+        uint32_t compType, width, height, tileNum;
+        if (f.read(ver, 1, 4) != 4) return false;
+        if (std::strncmp(ver, Graphics::HEADER_VERSION_V1_0, 4) != 0) {
+          std::printf("Invalid or unsupported MBC version.\n");
+          return false;
+        }
+        if (f.read(&compType, 4, 1) != 1) return false;
+        compType = get32u(&compType);
+        if (f.read(&width, 4, 1) != 1) return false;
+        width = get32u(&width);
+        if (f.read(&height, 4, 1) != 1) return false;
+        height = get32u(&height);
+
+        tileNum = (((width+63) & 63)*((height+63) & 63)) / 4096;
+
+        // Displaying TBC stats
+        std::printf("File type:       MBC\n");
+        std::printf("MBC version:     1.0\n");
+        std::printf("Compression:     0x%04x - %s\n", compType, Options::GetEncodingName(compType).c_str());
+        std::printf("Width:           %d\n", width);
+        std::printf("Height:          %d\n", height);
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else {
+        std::printf("File type:       Unknown\n");
+        return false;
+      }
+      return true;
+    }
+  }
+  return false;
+}

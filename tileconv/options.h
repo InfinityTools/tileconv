@@ -100,6 +100,10 @@ public:
   void setThreads(int v) noexcept;
   int getThreads() const noexcept;
 
+  /** Show statistics about the specified input file(s) only. */
+  void setShowInfo(bool b) noexcept { m_showInfo = b; }
+  bool isShowInfo() const noexcept { return m_showInfo; }
+
   /** Specify encoding type. */
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
   Encoding getEncoding() const noexcept { return m_encoding; }
@@ -121,6 +125,7 @@ private:
   static const bool         DEF_HALT_ON_ERROR;
   static const bool         DEF_MOSC;
   static const bool         DEF_DEFLATE;
+  static const bool         DEF_SHOWINFO;
   static const int          DEF_SILENT;
   static const int          DEF_QUALITY;
   static const int          DEF_THREADS;
@@ -131,6 +136,7 @@ private:
   bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
   bool                      m_mosc;         // create MOSC output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
+  bool                      m_showInfo;
   int                       m_silent;       // silence level (0:verbose, 1:summary only, 2:no output)
   int                       m_quality;      // color reduction quality (0:fast, 9:slow)
   int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
