@@ -39,6 +39,7 @@ Options:
                 Additional techniques: levels 4 to 9
   -j num      Number of parallel jobs to speed up the conversion process.
               Valid numbers: 0 (autodetect), 1..256 (Default: 0)
+  -I          Show file information and exit.
   -V          Print version number and exit.
 
 Supported input file types: TIS, MOS, TBC, MBC
@@ -62,6 +63,7 @@ in its entirety.
 External libraries and include files are assumed to be located in the 
 subfolders "zlib", "squish" and "pngquant". The libraries are providing their 
 own instructions how to compile them. Afterwards call "make" to build tileconv.
+Note: You'll need a compiler that supports the C++11 standard.
 
 If you want to change paths for the external libraries or include files, 
 you can do so by modifying the file "config.mk" by hand.
