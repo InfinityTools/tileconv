@@ -27,18 +27,24 @@ Options:
                 2: BC2/DXT3
                 3: BC3/DXT5
   -u          Do not apply tile compression.
-  -o outfile  Select output file. (Works with single input file only!)
+  -o output   Select output file or folder.
+              (Note: Output file works only with single input file!)
   -z          MOS only: Decompress MBC into compressed MOS (MOSC).
-  -d          Enable color dithering. (deprecated, use -q instead!)
-  -q level    Specify quality vs. speed ratio when converting MBC->MOS
-              or TBC->TIS. Supported levels: 0..9 (Default: 4)
-              (0=fast and lower quality, 9=slow and higher quality)
-              Applied level-dependent features:
-                Dithering:             levels 5 to 9
-                Posterization:         levels 0 to 2
-                Additional techniques: levels 4 to 9
+  -q level    Specify quality vs. speed ratio. Supported levels: 0..9
+              (Defaults: 9 for encoding and 4 for decoding)
+              Applied level-dependent features
+                for encoding TIS/MOS to TBC/MBC:
+                  Iterative cluster fit:   levels 7 to 9
+                  Single cluster fit:      levels 3 to 6
+                  Range fit:               levels 0 to 2
+                  Weight color by alpha:   levels 5 to 9
+                for decoding TBC/MBC to TIS/MOS:
+                  Dithering:               levels 5 to 9
+                  Posterization:           levels 0 to 2
+                  Additional techniques:   levels 4 to 9
   -j num      Number of parallel jobs to speed up the conversion process.
               Valid numbers: 0 (autodetect), 1..256 (Default: 0)
+  -T          Assume undetected input files as headerless TIS (use with care!)
   -I          Show file information and exit.
   -V          Print version number and exit.
 
