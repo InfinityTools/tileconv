@@ -91,7 +91,7 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         if (fin.read(ver, 1, 4) != 4) return false;
         if (std::strncmp(ver, HEADER_VERSION_V2, 4) == 0) {
           if (!getOptions().isSilent()) {
-            std::printf("Warning: Incorrect TIS version 2 found. Continuing anyway.\n");
+            std::printf("Warning: Incorrect TIS version 2 found. Converting anyway.\n");
           }
         } else if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
           std::printf("Invalid TIS version\n");

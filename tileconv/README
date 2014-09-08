@@ -51,7 +51,7 @@ Options:
                   Additional techniques:   levels 4 to 9
   -j num      Number of parallel jobs to speed up the conversion process.
               Valid numbers: 0 (autodetect), 1..256 (Default: 0)
-  -T          Assume undetected input files as headerless TIS (use with care!)
+  -T          Treat unrecognized input files as headerless TIS.
   -I          Show file information and exit.
   -V          Print version number and exit.
 

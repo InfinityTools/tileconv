@@ -171,7 +171,7 @@ bool Options::init(int argc, char *argv[]) noexcept
     showHelp();
     return false;
   } else if (getInputCount() > 1 && isOutFile()) {
-    std::printf("Cannot use parameter -o with multiple input files\n");
+    std::printf("You cannot specify output file with multiple input files\n");
     showHelp();
     return false;
   }
@@ -194,18 +194,9 @@ void Options::showHelp() noexcept
   std::printf("                2: BC2/DXT3\n");
   std::printf("                3: BC3/DXT5\n");
   std::printf("  -u          Do not apply tile compression.\n");
-//  std::printf("  -o outfile  Select output file. (Works with single input file only!)\n");
   std::printf("  -o output   Select output file or folder.\n");
   std::printf("              (Note: Output file works only with single input file!)\n");
   std::printf("  -z          MOS only: Decompress MBC into compressed MOS (MOSC).\n");
-//  std::printf("  -d          Enable color dithering. (deprecated, use -q instead!)\n");
-//  std::printf("  -q level    Specify quality vs. speed ratio when converting MBC->MOS\n");
-//  std::printf("              or TBC->TIS. Supported levels: 0..9 (Default: 4)\n");
-//  std::printf("              (0=fast and lower quality, 9=slow and higher quality)\n");
-//  std::printf("              Applied level-dependent features:\n");
-//  std::printf("                Dithering:             levels 5 to 9\n");
-//  std::printf("                Posterization:         levels 0 to 2\n");
-//  std::printf("                Additional techniques: levels 4 to 9\n");
   std::printf("  -q level    Specify quality vs. speed ratio. Supported levels: 0..9\n");
   std::printf("              (Defaults: 9 for encoding and 4 for decoding)\n");
   std::printf("              Applied level-dependent features\n");
@@ -220,7 +211,7 @@ void Options::showHelp() noexcept
   std::printf("                  Additional techniques:   levels 4 to 9\n");
   std::printf("  -j num      Number of parallel jobs to speed up the conversion process.\n");
   std::printf("              Valid numbers: 0 (autodetect), 1..%d (Default: 0)\n", TileThreadPool::MAX_THREADS);
-  std::printf("  -T          Assume undetected input files as headerless TIS (use with care!)\n");
+  std::printf("  -T          Treat unrecognized input files as headerless TIS.\n");
   std::printf("  -I          Show file information and exit.\n");
   std::printf("  -V          Print version number and exit.\n\n");
   std::printf("Supported input file types: TIS, MOS, TBC, MBC\n");
@@ -230,14 +221,8 @@ void Options::showHelp() noexcept
 bool Options::addInput(const std::string &inFile) noexcept
 {
   if (!inFile.empty()) {
-    File f(inFile.c_str(), "rb");
-    if (!f.error()) {
-      for (auto iter = m_inFiles.cbegin(); iter != m_inFiles.cend(); ++iter) {
-        if (*iter == inFile) return true;
-      }
-      m_inFiles.emplace_back(std::string(inFile));
-      return true;
-    }
+    m_inFiles.emplace_back(std::string(inFile));
+    return true;
   }
   return false;
 }
