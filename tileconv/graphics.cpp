@@ -48,6 +48,7 @@ const unsigned Graphics::PALETTE_SIZE                = 1024;
 const unsigned Graphics::MAX_TILE_SIZE_8             = 64*64;
 const unsigned Graphics::MAX_TILE_SIZE_32            = 64*64*4;
 
+const unsigned Graphics::MAX_PROGRESS                = 69;
 
 Graphics::Graphics(const Options &options) noexcept
 : m_options(options)
@@ -131,10 +132,11 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         v32 = get32u(&tileCount);
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing tile count
         if (!getOptions().isSilent()) std::printf("Tile count: %d\n", tileCount);
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // converting tiles
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0;
+        unsigned nextTileIdx = 0, curProgress = 0;
         double ratioCount = 0.0;    // counts the compression ratios of all tiles
         for (unsigned tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
@@ -152,6 +154,9 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             double ratio = 0.0;
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
+            }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
             }
             ratioCount += ratio;
             nextTileIdx++;
@@ -188,11 +193,15 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             ratioCount += ratio;
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -266,9 +275,10 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
           std::printf("Tile count: %d, encoding: %d - %s\n",
                       tileCount, compType, Options::GetEncodingName(compType).c_str());
         }
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        uint32_t nextTileIdx = 0;
+        uint32_t nextTileIdx = 0, curProgress = 0;
         for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
@@ -282,6 +292,9 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             }
             if (!writeDecodedTisTile(retVal, fout)) {
               return false;
+            }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
             }
             nextTileIdx++;
           }
@@ -319,10 +332,14 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             if (!writeDecodedTisTile(retVal, fout)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -493,10 +510,11 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         v32 = mosHeight; v32 = get32u(&v32);
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing MOS height
         if (getOptions().isVerbose()) std::printf("Tile count: %d\n", tileCount);
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // processing tiles
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0;
+        unsigned nextTileIdx = 0, curProgress = 0;
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
         int curIndex = 0;
         uint32_t remTileHeight = mosHeight;   // remaining tile height to cover
@@ -522,6 +540,9 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
               double ratio = 0.0;
               if (!writeEncodedTile(retVal, fout, ratio)) {
                 return false;
+              }
+              if (getOptions().getVerbosity() == 1) {
+                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
               }
               ratioCount += ratio;
               nextTileIdx++;
@@ -560,11 +581,15 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             ratioCount += ratio;
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -668,10 +693,11 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
           std::printf("Width: %d, height: %d, columns: %d, rows: %d, encoding: %d - %s\n",
                       mosWidth, mosHeight, mosCols, mosRows, compType, Options::GetEncodingName(compType).c_str());
         }
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         uint32_t tileCount = mosCols * mosRows;
-        uint32_t nextTileIdx = 0;
+        uint32_t nextTileIdx = 0, curProgress = 0;
         int curIndex = 0;                       // the current tile index
         for (uint32_t row = 0; row < mosRows; row++) {
           for (uint32_t col = 0; col < mosCols; col++, curIndex++) {
@@ -689,6 +715,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
               }
               if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
                 return false;
+              }
+              if (getOptions().getVerbosity() == 1) {
+                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
               }
               nextTileIdx++;
             }
@@ -727,10 +756,14 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -862,6 +895,19 @@ bool Graphics::writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32
 }
 
 
+TileDataPtr Graphics::processTile(TileDataPtr tileData) noexcept
+{
+  if (tileData != nullptr) {
+    if (tileData->isEncoding) {
+      return encodeTile(tileData);
+    } else {
+      return decodeTile(tileData);
+    }
+  }
+  return nullptr;
+}
+
+
 TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
 {
   if (tileData != nullptr &&
@@ -931,11 +977,7 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
         v16 = (uint16_t)tileData->tileHeight; v16 = get16u(&v16); // tile height in ready-to-write format
         std::memcpy(encodedPtr, &v16, 2); encodedPtr += 2;        // setting tile height
         // encoding pixel data
-//        std::printf("Debug: Graphics::encodeTile() calling getTranscoder()->compressImage(0x%08x, 0x%08x, %d, %d, 0x%04x)\n",
-//                    (unsigned)((size_t)ptrARGB.get()), (unsigned)((size_t)encodedPtr),
-//                    tileData->tileWidth, tileData->tileHeight, getTranscoder()->getFlags());
         getTranscoder()->compressImage(ptrARGB.get(), encodedPtr, tileData->tileWidth, tileData->tileHeight);
-//        std::printf("Debug: Graphics::encodeTile() finished executing squish::CompressImage()\n");
         break;
       }
       default:
@@ -1048,3 +1090,20 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
   }
   return TileDataPtr(nullptr);
 }
+
+
+unsigned Graphics::showProgress(unsigned curTile, unsigned maxTiles,
+                                unsigned curProgress, unsigned maxProgress,
+                                char symbol) const noexcept
+{
+  curTile++;
+  if (curTile > maxTiles) curTile = maxTiles;
+  if (curProgress > maxProgress) curProgress = maxProgress;
+  unsigned v = curTile*maxProgress / maxTiles;
+  while (curProgress < v) {
+    std::printf("%c", symbol);
+    curProgress++;
+  }
+  return v;
+}
+

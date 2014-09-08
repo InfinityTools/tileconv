@@ -101,7 +101,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting TIS -> TBC\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.tisToTBC(inputFile, outputFile)) {
             retVal = false;
@@ -131,7 +130,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting MOS -> MBC\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.mosToMBC(inputFile, outputFile)) {
             retVal = false;
@@ -161,7 +159,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting TBC -> TIS\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.tbcToTIS(inputFile, outputFile)) {
             retVal = false;
@@ -191,7 +188,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting MBC -> MOS\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.mbcToMOS(inputFile, outputFile)) {
             retVal = false;

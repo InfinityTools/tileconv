@@ -35,7 +35,7 @@ const bool Options::DEF_HALT_ON_ERROR = true;
 const bool Options::DEF_MOSC          = false;
 const bool Options::DEF_DEFLATE       = true;
 const bool Options::DEF_SHOWINFO      = false;
-const int Options::DEF_SILENT         = 1;
+const int Options::DEF_VERBOSITY      = 1;
 const int Options::DEF_QUALITY        = 4;
 const int Options::DEF_THREADS        = 0;    // autodetect
 const Encoding Options::DEF_ENCODING  = Encoding::BC1;
@@ -49,7 +49,7 @@ Options::Options() noexcept
 , m_mosc(DEF_MOSC)
 , m_deflate(DEF_DEFLATE)
 , m_showInfo(DEF_SHOWINFO)
-, m_silent(DEF_SILENT)
+, m_verbosity(DEF_VERBOSITY)
 , m_quality(DEF_QUALITY)
 , m_threads(DEF_THREADS)
 , m_encoding(DEF_ENCODING)
@@ -80,10 +80,10 @@ bool Options::init(int argc, char *argv[]) noexcept
         setHaltOnError(false);
         break;
       case 's':
-        setSilence(2);
+        setVerbosity(0);
         break;
       case 'v':
-        setSilence(0);
+        setVerbosity(2);
         break;
       case 't':
         if (optarg != nullptr) {
@@ -261,9 +261,9 @@ bool Options::setOutput(const std::string &outFile) noexcept
 }
 
 
-void Options::setSilence(int level) noexcept
+void Options::setVerbosity(int level) noexcept
 {
-  m_silent = std::max(0, std::min(2, level));
+  m_verbosity = std::max(0, std::min(2, level));
 }
 
 
@@ -429,12 +429,12 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
     sum += (m_haltOnError) ? "enabled" : "disabled";
   }
 
-  if (complete || m_silent != DEF_SILENT) {
+  if (complete || m_verbosity != DEF_VERBOSITY) {
     if (!sum.empty()) sum += ", ";
     sum += "verbosity level = ";
-    if (m_silent == 0) {
+    if (m_verbosity == 2) {
       sum += "silent";
-    }else if (m_silent == 2) {
+    }else if (m_verbosity == 0) {
       sum += "verbose";
     } else {
       sum += "default";

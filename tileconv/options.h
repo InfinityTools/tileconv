@@ -77,12 +77,12 @@ public:
   void setHaltOnError(bool b) noexcept { m_haltOnError = b; }
   bool isHaltOnError() const noexcept { return m_haltOnError; }
 
-  /** Level of text output. 0=verbose, 1=summary only, 2=no output. */
-  void setSilence(int level) noexcept;
-  int getSilence() const noexcept { return m_silent; }
+  /** Level of text output. 2=verbose, 1=summary only, 0=no output. */
+  void setVerbosity(int level) noexcept;
+  int getVerbosity() const noexcept { return m_verbosity; }
   /** Check for specific verbosity levels. */
-  bool isSilent() const noexcept { return m_silent > 1; }
-  bool isVerbose() const noexcept { return m_silent < 1; }
+  bool isSilent() const noexcept { return m_verbosity < 1; }
+  bool isVerbose() const noexcept { return m_verbosity > 1; }
 
   /** Create MOSC files (MBC->MOS conversion only)? */
   void setMosc(bool b) noexcept { m_mosc = b; }
@@ -126,7 +126,7 @@ private:
   static const bool         DEF_MOSC;
   static const bool         DEF_DEFLATE;
   static const bool         DEF_SHOWINFO;
-  static const int          DEF_SILENT;
+  static const int          DEF_VERBOSITY;
   static const int          DEF_QUALITY;
   static const int          DEF_THREADS;
   static const Encoding     DEF_ENCODING;
@@ -137,7 +137,7 @@ private:
   bool                      m_mosc;         // create MOSC output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
   bool                      m_showInfo;
-  int                       m_silent;       // silence level (0:verbose, 1:summary only, 2:no output)
+  int                       m_verbosity;    // verbosity level (2:verbose, 1:summary only, 0:no output)
   int                       m_quality;      // color reduction quality (0:fast, 9:slow)
   int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
   Encoding                  m_encoding;     // encoding type
