@@ -37,6 +37,7 @@ const char Graphics::HEADER_MOSC_SIGNATURE[4] = {'M', 'O', 'S', 'C'};
 const char Graphics::HEADER_TBC_SIGNATURE[4]  = {'T', 'B', 'C', ' '};
 const char Graphics::HEADER_MBC_SIGNATURE[4]  = {'M', 'B', 'C', ' '};
 const char Graphics::HEADER_VERSION_V1[4]     = {'V', '1', ' ', ' '};
+const char Graphics::HEADER_VERSION_V2[4]     = {'V', '2', ' ', ' '};
 const char Graphics::HEADER_VERSION_V1_0[4]   = {'V', '1', '.', '0'};
 
 const unsigned Graphics::HEADER_TBC_SIZE             = 16;
@@ -72,50 +73,77 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
     if (!fin.error()) {
       char sig[4], ver[4];
       uint32_t tileCount, tileSize, headerSize, tileDim;
+      bool isHeaderless = false;
 
       // parsing TIS header
-      if (fin.read(sig, 1, 4) != 4) return false;;
+      if (fin.read(sig, 1, 4) != 4) return false;
       if (std::strncmp(sig, HEADER_TIS_SIGNATURE, 4) != 0) {
-        std::printf("Invalid TIS signature\n");
-        return false;
-      }
-
-      if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
-        std::printf("Invalid TIS version\n");
-        return false;
-      }
-
-      if (fin.read(&tileCount, 4, 1) != 1) return false;
-      tileCount = get32u(&tileCount);
-      if (tileCount == 0) {
-        std::printf("No tiles found\n");
-        return false;
-      }
-
-      if (fin.read(&tileSize, 4, 1) != 1) return false;
-      tileSize = get32u(&tileSize);
-      if (tileSize != 0x1400) {
-        if (tileSize == 0x000c) {
-          std::printf("PVRZ-based TIS files are not supported\n");
+        if (getOptions().assumeTis()) {
+          fin.seek(0L, SEEK_SET);
+          isHeaderless = true;
         } else {
-          std::printf("Invalid tile size\n");
+          std::printf("Invalid TIS signature\n");
+          return false;
         }
-        return false;
       }
 
-      if (fin.read(&headerSize, 4, 1) != 1) return false;
-      headerSize = get32u(&headerSize);
-      if (headerSize < 0x18) {
-        std::printf("Invalid header size\n");
-        return false;
-      }
+      if (!isHeaderless) {
+        if (fin.read(ver, 1, 4) != 4) return false;
+        if (std::strncmp(ver, HEADER_VERSION_V2, 4) == 0) {
+          if (!getOptions().isSilent()) {
+            std::printf("Warning: Incorrect TIS version 2 found. Continuing anyway.\n");
+          }
+        } else if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
+          std::printf("Invalid TIS version\n");
+          return false;
+        }
 
-      if (fin.read(&tileDim, 4, 1) != 1) return false;
-      tileDim = get32u(&tileDim);
-      if (tileDim != 0x40) {
-        std::printf("Invalid tile dimensions\n");
-        return false;
+        if (fin.read(&tileCount, 4, 1) != 1) return false;
+        tileCount = get32u(&tileCount);
+        if (tileCount == 0) {
+          std::printf("No tiles found\n");
+          return false;
+        }
+
+        if (fin.read(&tileSize, 4, 1) != 1) return false;
+        tileSize = get32u(&tileSize);
+        if (tileSize != 0x1400) {
+          if (tileSize == 0x000c) {
+            std::printf("PVRZ-based TIS files are not supported\n");
+          } else {
+            std::printf("Invalid tile size\n");
+          }
+          return false;
+        }
+
+        if (fin.read(&headerSize, 4, 1) != 1) return false;
+        headerSize = get32u(&headerSize);
+        if (headerSize < 0x18) {
+          std::printf("Invalid header size\n");
+          return false;
+        }
+
+        if (fin.read(&tileDim, 4, 1) != 1) return false;
+        tileDim = get32u(&tileDim);
+        if (tileDim != 0x40) {
+          std::printf("Invalid tile dimensions\n");
+          return false;
+        }
+      } else {
+        long size = fin.getsize();
+        fin.seek(0L, SEEK_SET);
+        if (size < 0L) {
+          std::printf("Error reading input file\n");
+          return false;
+        } else if ((size % 5120) != 0) {
+          std::printf("Headerless TIS has wrong file size\n");
+          return false;
+        } else {
+          if (!getOptions().isSilent()) std::printf("Warning: Headerless TIS file detected\n");
+          tileSize = 0x1400;
+          tileDim = 0x40;
+          tileCount = (uint32_t)(size / tileSize);
+        }
       }
 
       File fout(outFile.c_str(), "wb");
@@ -378,8 +406,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         Compression compression;
 
         // getting MOSC file size
-        fin.seek(0, SEEK_END);
-        moscSize = fin.tell();
+        moscSize = fin.getsize();
         if (moscSize <= 12) {
           std::printf("Invalid MOSC size\n");
           return false;
@@ -412,8 +439,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
           return false;
         }
       } else if (std::strncmp(sig, HEADER_MOS_SIGNATURE, 4) == 0) {   // loading MOS data
-        fin.seek(0, SEEK_END);
-        mosSize = fin.tell();
+        mosSize = fin.getsize();
         if (mosSize < 24) {
           std::printf("MOS size too small\n");
           return false;
@@ -918,6 +944,30 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
     uint16_t v16;                   // temp. variable (16-bit)
     uint32_t tileSizeEncoded;       // pixel encoded size of the tile
     Colors   colors(getOptions());
+
+    // setting encoding quality
+    switch (getOptions().getEncoding()) {
+      case Encoding::BC1:
+      case Encoding::BC2:
+      case Encoding::BC3:
+        switch (getOptions().getQuality()) {
+          case 0: case 1: case 2:
+            getTranscoder()->setFlags(DxtSquish::ColourRangeFit);
+            break;
+          case 3: case 4:
+            getTranscoder()->setFlags(DxtSquish::ColourClusterFit);
+            break;
+          case 5: case 6:
+            getTranscoder()->setFlags(DxtSquish::ColourClusterFit | DxtSquish::WeightColourByAlpha);
+            break;
+          default:
+            getTranscoder()->setFlags(DxtSquish::ColourIterativeClusterFit |
+                                     DxtSquish::WeightColourByAlpha);
+            break;
+        }
+      default:
+        break;
+    }
 
     tileData->size = 0;
 

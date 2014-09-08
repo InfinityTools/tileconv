@@ -86,6 +86,7 @@ public:
   static const char HEADER_TBC_SIGNATURE[4];          // TBC signature
   static const char HEADER_MBC_SIGNATURE[4];          // MBC signature
   static const char HEADER_VERSION_V1[4];             // TIS/MOS file version
+  static const char HEADER_VERSION_V2[4];             // TIS/MOS file version
   static const char HEADER_VERSION_V1_0[4];           // TBC/MBC file version
 
   static const unsigned HEADER_TBC_SIZE;              // TBC header size

@@ -31,8 +31,13 @@ THE SOFTWARE.
 class Options
 {
 public:
-  /** Attempts to determine the type of the given file. */
-  static FileType GetFileType(const std::string &fileName) noexcept;
+  /**
+   * Attempts to determine the type of the given file.
+   * \param fileName The file to check.
+   * \param assumeTis Enable to check for headerless TIS files.
+   * \return The detected file type, or FileType::UNKNOWN on error.
+   */
+  static FileType GetFileType(const std::string &fileName, bool assumeTis) noexcept;
 
   /** Returns the given input filename with the new file extension as specified by type. */
   static std::string SetFileExt(const std::string &fileName, FileType type) noexcept;
@@ -66,12 +71,14 @@ public:
   int getInputCount() const noexcept { return m_inFiles.size(); }
   const std::string& getInput(int idx) const noexcept;
 
-  /** Define output file name (for single file conversion only). */
+  /** Define output file name or path. */
   bool setOutput(const std::string &outFile) noexcept;
   /** Call to activate auto-generation of output filename. */
   void resetOutput() noexcept;
-  bool isOutput() const noexcept { return !m_outFile.empty(); }
-  const std::string& getOutput() const noexcept { return m_outFile; }
+  bool isOutPath() const noexcept { return !m_outPath.empty(); }
+  bool isOutFile() const noexcept { return !m_outFile.empty(); }
+  const std::string& getOutFile() const noexcept { return m_outFile; }
+  const std::string& getOutPath() const noexcept { return m_outPath; }
 
   /** Cancel operation on error? Only effective when processing multiple files. */
   void setHaltOnError(bool b) noexcept { m_haltOnError = b; }
@@ -108,6 +115,10 @@ public:
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
   Encoding getEncoding() const noexcept { return m_encoding; }
 
+  /** Treat unknown input files as headerless TIS files. */
+  void setAssumeTis(bool b) noexcept { m_assumeTis = b; }
+  bool assumeTis() const noexcept { return m_assumeTis; }
+
   /**
    * Returns a string containing a list of options in textual form.
    * \param complete If false, only options differing from the defaults are listed,
@@ -117,7 +128,6 @@ public:
   std::string getOptionsSummary(bool complete) const noexcept;
 
 private:
-  static const int          MAX_NAME_LENGTH;    // max. filepath length
   static const int          MAX_THREADS;        // max. number of threads
   static const int          DEFLATE;            // !DEFLATE deflates
 
@@ -126,6 +136,7 @@ private:
   static const bool         DEF_MOSC;
   static const bool         DEF_DEFLATE;
   static const bool         DEF_SHOWINFO;
+  static const bool         DEF_ASSUMETIS;
   static const int          DEF_VERBOSITY;
   static const int          DEF_QUALITY;
   static const int          DEF_THREADS;
@@ -137,12 +148,14 @@ private:
   bool                      m_mosc;         // create MOSC output
   bool                      m_deflate;      // apply zlib compression to TBC/MBC
   bool                      m_showInfo;
+  bool                      m_assumeTis;    // Treat unknown file types as headerless TIS files
   int                       m_verbosity;    // verbosity level (2:verbose, 1:summary only, 0:no output)
   int                       m_quality;      // color reduction quality (0:fast, 9:slow)
   int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
   Encoding                  m_encoding;     // encoding type
   std::vector<std::string>  m_inFiles;
-  std::string               m_outFile;
+  std::string               m_outPath;      // file path (empty or with trailing path separator) only!
+  std::string               m_outFile;      // file name only!
 };
 
 

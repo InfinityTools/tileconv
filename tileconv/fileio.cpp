@@ -20,6 +20,34 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include "fileio.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+
+bool File::IsDirectory(const char *fileName) noexcept
+{
+  if (fileName != nullptr) {
+    struct stat s;
+    if (stat(fileName, &s) != -1) {
+      return S_ISDIR(s.st_mode);
+    }
+  }
+  return false;
+}
+
+
+long File::GetFileSize(const char *fileName) noexcept
+{
+  if (fileName != nullptr) {
+    struct stat s;
+    if (stat(fileName, &s) != -1) {
+      return s.st_size;
+    }
+  }
+  return -1L;
+}
+
 
 File::File(const char *fileName, const char *mode) noexcept
 : m_file(0)
@@ -202,5 +230,19 @@ bool File::error() noexcept
 void File::perror(const char *s) noexcept
 {
   std::perror(s);
+}
+
+
+long File::getsize() noexcept
+{
+  if (m_file) {
+    long curPos = tell();
+    if (curPos >= 0 && seek(0, SEEK_END)) {
+      long size = tell();
+      seek(curPos, SEEK_SET);
+      return size;
+    }
+  }
+  return -1L;
 }
 
