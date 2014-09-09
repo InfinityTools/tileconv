@@ -950,7 +950,7 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
       case Encoding::BC1:
       case Encoding::BC2:
       case Encoding::BC3:
-        switch (getOptions().getQuality()) {
+        switch (getOptions().getEncodingQuality()) {
           case 0: case 1: case 2:
             getTranscoder()->setFlags(DxtSquish::ColourRangeFit);
             break;
@@ -1152,6 +1152,9 @@ unsigned Graphics::showProgress(unsigned curTile, unsigned maxTiles,
   unsigned v = curTile*maxProgress / maxTiles;
   while (curProgress < v) {
     std::printf("%c", symbol);
+#ifndef WIN32
+    std::fflush(stdout);
+#endif
     curProgress++;
   }
   return v;

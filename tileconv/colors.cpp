@@ -69,7 +69,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
     if (!quant.setTarget(dst, size)) return 0;
     std::memset(palette, 0, 1024);
     if (!quant.setPalette(palette, 1024)) return 0;
-    quant.setSpeed(10 - getOptions().getQuality());   // speed is defined as "10 - quality"
+    quant.setSpeed(10 - getOptions().getDecodingQuality());   // speed is defined as "10 - quality"
 
     if (!quant.quantize()) return 0;
     if (getOptions().isVerbose()) {

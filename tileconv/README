@@ -37,15 +37,21 @@ Options:
   -o output   Select output file or folder.
               (Note: Output file works only with single input file!)
   -z          MOS only: Decompress MBC into compressed MOS (MOSC).
-  -q level    Specify quality vs. speed ratio. Supported levels: 0..9
-              (Defaults: 9 for encoding and 4 for decoding)
-              Applied level-dependent features
-                for encoding TIS/MOS to TBC/MBC:
+  -q Dec[Enc] Set quality levels for decoding and, optionally, encoding.
+              Supported levels: 0..9 (Defaults: 4 for decoding, 9 for encoding)
+              (0=fast and lower quality, 9=slow and higher quality)
+              Specify both levels as a single argument. First digit indicates
+              decoding quality and second digit indicates encoding quality.
+              Specify '-' as placeholder for default levels.
+              Example 1: -q 27 (decoding level: 2, encoding level: 7)
+              Example 2: -q -7 (default decoding level, encoding level: 7)
+              Example 3: -q 2  (decoding level: 2, default encoding level)
+              Applied level-dependent features for encoding (DXTn only):
                   Iterative cluster fit:   levels 7 to 9
                   Single cluster fit:      levels 3 to 6
                   Range fit:               levels 0 to 2
                   Weight color by alpha:   levels 5 to 9
-                for decoding TBC/MBC to TIS/MOS:
+              Applied level-dependent features for decoding:
                   Dithering:               levels 5 to 9
                   Posterization:           levels 0 to 2
                   Additional techniques:   levels 4 to 9

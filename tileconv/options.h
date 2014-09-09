@@ -95,9 +95,12 @@ public:
   void setMosc(bool b) noexcept { m_mosc = b; }
   bool isMosc() const noexcept { return m_mosc; }
 
-  /** Color reduction quality in range 0..9. Calculate "r = 10 - quality" to get real value. */
-  void setQuality(int v) noexcept;
-  int getQuality() const noexcept { return m_quality; }
+  /** Encoding and decoding quality. Range: [0..9] each. */
+  void setQuality(int enc, int dec) noexcept;
+  void setEncodingQuality(int v) noexcept;
+  void setDecodingQuality(int v) noexcept;
+  int getEncodingQuality() const noexcept { return m_qualityEncoding; }
+  int getDecodingQuality() const noexcept { return m_qualityDecoding; }
 
   /** Apply zlib compression to tiles? */
   void setDeflate(bool b) noexcept { m_deflate = b; }
@@ -138,24 +141,26 @@ private:
   static const bool         DEF_SHOWINFO;
   static const bool         DEF_ASSUMETIS;
   static const int          DEF_VERBOSITY;
-  static const int          DEF_QUALITY;
+  static const int          DEF_QUALITY_ENCODING;
+  static const int          DEF_QUALITY_DECODING;
   static const int          DEF_THREADS;
   static const Encoding     DEF_ENCODING;
 
   static const char         ParamNames[];
 
-  bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
-  bool                      m_mosc;         // create MOSC output
-  bool                      m_deflate;      // apply zlib compression to TBC/MBC
+  bool                      m_haltOnError;      // cancel operation on error
+  bool                      m_mosc;             // create MOSC output
+  bool                      m_deflate;          // apply zlib compression to TBC/MBC
   bool                      m_showInfo;
-  bool                      m_assumeTis;    // Treat unknown file types as headerless TIS files
-  int                       m_verbosity;    // verbosity level (2:verbose, 1:summary only, 0:no output)
-  int                       m_quality;      // color reduction quality (0:fast, 9:slow)
-  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
-  Encoding                  m_encoding;     // encoding type
+  bool                      m_assumeTis;        // Treat unknown file types as headerless TIS files
+  int                       m_verbosity;        // verbosity level (2:verbose, 1:summary only, 0:no output)
+  int                       m_qualityDecoding;  // color reduction quality (0:fast, 9:slow)
+  int                       m_qualityEncoding;  // DXTn compression quality (0:fast, 9:slow)
+  int                       m_threads;          // how many threads to use for encoding/decoding
+  Encoding                  m_encoding;         // encoding type
   std::vector<std::string>  m_inFiles;
-  std::string               m_outPath;      // file path (empty or with trailing path separator) only!
-  std::string               m_outFile;      // file name only!
+  std::string               m_outPath;          // file path (empty or with trailing path separator) only!
+  std::string               m_outFile;          // file name only!
 };
 
 
