@@ -75,6 +75,7 @@ in its entirety.
 External libraries and include files are assumed to be located in the 
 subfolders "zlib", "squish" and "pngquant". The libraries are providing their 
 own instructions how to compile them. Afterwards call "make" to build tileconv.
+Note: You'll need a compiler that supports the C++11 standard.
 
 If you want to change paths for the external libraries or include files, 
 you can do so by modifying the file "config.mk" by hand.
