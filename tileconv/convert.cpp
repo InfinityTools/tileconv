@@ -226,7 +226,8 @@ bool Convert::showInfo(const std::string &fileName) noexcept
         uint32_t tileNum, tileSize;
         // Parsing TIS file
         if (f.read(ver, 1, 4) != 4) return false;
-        if (std::strncmp(ver, Graphics::HEADER_VERSION_V1, 4) != 0) {
+        if (std::strncmp(ver, Graphics::HEADER_VERSION_V1, 4) != 0 &&
+            std::strncmp(ver, Graphics::HEADER_VERSION_V2, 4) != 0) {
           std::printf("Invalid TIS version.\n");
           return false;
         }
@@ -361,6 +362,14 @@ bool Convert::showInfo(const std::string &fileName) noexcept
         std::printf("Compression:     0x%04x - %s\n", compType, Options::GetEncodingName(compType).c_str());
         std::printf("Width:           %d\n", width);
         std::printf("Height:          %d\n", height);
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else if (getOptions().assumeTis() && (f.getsize() % 5120) == 0) {
+        int size = (int)f.getsize();
+        int tileNum = size / 5120;
+
+        // Displaying assumed TIS stats
+        std::printf("File type:       TIS (assumed)\n");
+        std::printf("File subtype:    Paletted\n");
         std::printf("Number of tiles: %d\n", tileNum);
       } else {
         std::printf("File type:       Unknown\n");
