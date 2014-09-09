@@ -31,6 +31,7 @@ THE SOFTWARE.
 
 Convert::Convert() noexcept
 : m_options()
+, m_initialized(true)
 {
 }
 
@@ -48,13 +49,14 @@ Convert::~Convert() noexcept
 
 bool Convert::init(int argc, char *argv[]) noexcept
 {
-  return m_options.init(argc, argv);
+  return (m_initialized = m_options.init(argc, argv));
 }
 
 
 bool Convert::execute() noexcept
 {
   // checking state
+  if (!isInitialized()) return false;
   if (getOptions().getInputCount() == 0) return false;
 
   // Special case: show information of input files only
@@ -75,18 +77,18 @@ bool Convert::execute() noexcept
   bool retVal = true;
   for (int i = 0; i < getOptions().getInputCount(); i++) {
     if (!getOptions().isSilent() && getOptions().getInputCount() > 1) {
-      std::printf("Processing file %d of %d\n", i+1, getOptions().getInputCount());
+      std::printf("\nProcessing file %d of %d\n", i+1, getOptions().getInputCount());
     }
     const std::string &inputFile = getOptions().getInput(i);
     std::string outputFile;
     if (!inputFile.empty()) {
-      switch (Options::GetFileType(inputFile)) {
+      switch (Options::GetFileType(inputFile, getOptions().assumeTis())) {
         case FileType::TIS:
           // generating output filename
-          if (!getOptions().isOutput()) {
-            outputFile = Options::SetFileExt(inputFile, FileType::TBC);
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
           } else {
-            outputFile = getOptions().getOutput();
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TBC);
           }
           if (outputFile.empty()) {
             retVal = false;
@@ -101,7 +103,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting TIS -> TBC\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.tisToTBC(inputFile, outputFile)) {
             retVal = false;
@@ -113,10 +114,10 @@ bool Convert::execute() noexcept
           break;
         case FileType::MOS:
           // generating output filename
-          if (!getOptions().isOutput()) {
-            outputFile = Options::SetFileExt(inputFile, FileType::MBC);
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
           } else {
-            outputFile = getOptions().getOutput();
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MBC);
           }
           if (outputFile.empty()) {
             retVal = false;
@@ -131,7 +132,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting MOS -> MBC\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.mosToMBC(inputFile, outputFile)) {
             retVal = false;
@@ -143,10 +143,10 @@ bool Convert::execute() noexcept
           break;
         case FileType::TBC:
           // generating output filename
-          if (!getOptions().isOutput()) {
-            outputFile = Options::SetFileExt(inputFile, FileType::TIS);
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
           } else {
-            outputFile = getOptions().getOutput();
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TIS);
           }
           if (outputFile.empty()) {
             retVal = false;
@@ -161,7 +161,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting TBC -> TIS\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.tbcToTIS(inputFile, outputFile)) {
             retVal = false;
@@ -173,10 +172,10 @@ bool Convert::execute() noexcept
           break;
         case FileType::MBC:
           // generating output filename
-          if (!getOptions().isOutput()) {
-            outputFile = Options::SetFileExt(inputFile, FileType::MOS);
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
           } else {
-            outputFile = getOptions().getOutput();
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MOS);
           }
           if (outputFile.empty()) {
             retVal = false;
@@ -191,7 +190,6 @@ bool Convert::execute() noexcept
           if (!getOptions().isSilent()) {
             std::printf("Converting MBC -> MOS\n");
             std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
-            std::printf("Converting...\n");
           }
           if (!gfx.mbcToMOS(inputFile, outputFile)) {
             retVal = false;
@@ -261,8 +259,7 @@ bool Convert::showInfo(const std::string &fileName) noexcept
           isMosc = true;
 
           // getting MOSC file size
-          f.seek(0, SEEK_END);
-          moscSize = f.tell();
+          moscSize = f.getsize();
           if (moscSize <= 12) {
             std::printf("Invalid MOSC size\n");
             return false;
@@ -294,8 +291,7 @@ bool Convert::showInfo(const std::string &fileName) noexcept
           }
         } else {
           // reading MOS header into memory
-          f.seek(0, SEEK_END);
-          mosSize = f.tell();
+          mosSize = f.getsize();
           if (mosSize < 24) {
             std::printf("MOS size too small\n");
             return false;

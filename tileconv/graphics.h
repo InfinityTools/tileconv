@@ -51,11 +51,11 @@ public:
   /** Access to DXTn transcoder. */
   DxtPtr& getTranscoder() noexcept { return m_transcoder; }
 
-  /** Encodes a single tile. Returns success state. */
-  TileDataPtr encodeTile(TileDataPtr tileData) noexcept;
-
-  /** Decodes a single tile. Returns success state. */
-  TileDataPtr decodeTile(TileDataPtr tileData) noexcept;
+  /**
+   * Processes the given tile data, depending on its configuration.
+   * Returns the processed tile data, or nullptr on error.
+   */
+  TileDataPtr processTile(TileDataPtr tileData) noexcept;
 
 private:
   // Called by tisToTBC() and mosToMBC() to write an encoded tile to the output file
@@ -68,8 +68,16 @@ private:
   bool writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32_t &palOfs,
                            uint32_t &tileOfs, uint32_t &dataOfsRel, uint32_t dataOfsBase) noexcept;
 
-  // Compresses an RGBA image into BCn encoded data. width and height must be a multiple of 4!
-  void compressImage(const uint8_t *src, int width, int height, uint8_t *dst, int flags) noexcept;
+  // Encodes a single tile. Returns encoded tile data or nullptr on error.
+  TileDataPtr encodeTile(TileDataPtr tileData) noexcept;
+
+  // Decodes a single tile. Returns decoded tile data or nullptr on error.
+  TileDataPtr decodeTile(TileDataPtr tileData) noexcept;
+
+  // Update the progression of a progress bar. Returns updated curProgress.
+  unsigned showProgress(unsigned curTile, unsigned maxTiles,
+                        unsigned curProgress, unsigned maxProgress,
+                        char symbol) const noexcept;
 
 public:
   static const char HEADER_TIS_SIGNATURE[4];          // TIS signature
@@ -78,6 +86,7 @@ public:
   static const char HEADER_TBC_SIGNATURE[4];          // TBC signature
   static const char HEADER_MBC_SIGNATURE[4];          // MBC signature
   static const char HEADER_VERSION_V1[4];             // TIS/MOS file version
+  static const char HEADER_VERSION_V2[4];             // TIS/MOS file version
   static const char HEADER_VERSION_V1_0[4];           // TBC/MBC file version
 
   static const unsigned HEADER_TBC_SIZE;              // TBC header size
@@ -89,6 +98,8 @@ private:
   static const unsigned PALETTE_SIZE;                 // palette size in bytes
   static const unsigned MAX_TILE_SIZE_8;              // max. size (in bytes) of a 8-bit pixels tile
   static const unsigned MAX_TILE_SIZE_32;             // max. size (in bytes) of a 32-bit pixels tile
+
+  static const unsigned MAX_PROGRESS;                 // Available space for a progress bar
 
   const Options&  m_options;
   DxtPtr          m_transcoder;

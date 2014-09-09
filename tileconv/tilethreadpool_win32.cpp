@@ -142,14 +142,8 @@ DWORD WINAPI TileThreadPoolWin32::threadMain(LPVOID lpParam)
         TileDataPtr tileData = instance->getTileQueue().front();
         instance->getTileQueue().pop();
         ::ReleaseMutex(instance->m_tilesMutex);
-        if (tileData != nullptr) {
-          // executing encoding/decoding methods
-          if (tileData->isEncoding) {
-            tileData = instance->getGraphics().encodeTile(tileData);
-          } else {
-            tileData = instance->getGraphics().decodeTile(tileData);
-          }
-        }
+
+        tileData = instance->getGraphics().processTile(tileData);
 
         // storing results
         ::WaitForSingleObject(instance->m_resultsMutex, INFINITE);

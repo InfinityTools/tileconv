@@ -32,6 +32,13 @@ THE SOFTWARE.
 class File
 {
 public:
+  /** Returns true only if the given path is a directory. */
+  static bool IsDirectory(const char *fileName) noexcept;
+
+  /** Returns size of the given file in bytes. Returns -1 on error. */
+  static long GetFileSize(const char *fileName) noexcept;
+
+public:
   /** Opens a file in the specified mode. */
   File(const char *fileName, const char *mode) noexcept;
   /** Opens a file in the specified mode, using a custom buffer of given size. */
@@ -104,6 +111,9 @@ public:
 
   /** Prints s and a textual description of the error code stored in the system variable errno to stderr. */
   void perror(const char *s) noexcept;
+
+  /** Returns the size of the currently open file. Returns -1 on error. */
+  long getsize() noexcept;
 
 private:
   std::FILE     *m_file;    // current file handle

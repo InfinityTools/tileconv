@@ -128,14 +128,8 @@ void TileThreadPoolPosix::threadMain() noexcept
       TileDataPtr tileData = getTileQueue().front();
       getTileQueue().pop();
       lockTiles.unlock();
-      if (tileData != nullptr) {
-        // executing encoding/decoding methods
-        if (tileData->isEncoding) {
-          tileData = getGraphics().encodeTile(tileData);
-        } else {
-          tileData = getGraphics().decodeTile(tileData);
-        }
-      }
+
+      tileData = getGraphics().processTile(tileData);
 
       // storing results
       lockResults.lock();

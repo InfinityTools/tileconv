@@ -27,21 +27,22 @@ THE SOFTWARE.
 #include "version.h"
 #include "options.h"
 
-const int Options::MAX_NAME_LENGTH    = 1024;
-const int Options::MAX_THREADS        = 64;
-const int Options::DEFLATE            = 256;
+const int Options::MAX_THREADS          = 64;
+const int Options::DEFLATE              = 256;
 
-const bool Options::DEF_HALT_ON_ERROR = true;
-const bool Options::DEF_MOSC          = false;
-const bool Options::DEF_DEFLATE       = true;
-const bool Options::DEF_SHOWINFO      = false;
-const int Options::DEF_SILENT         = 1;
-const int Options::DEF_QUALITY        = 4;
-const int Options::DEF_THREADS        = 0;    // autodetect
-const Encoding Options::DEF_ENCODING  = Encoding::BC1;
+const bool Options::DEF_HALT_ON_ERROR   = true;
+const bool Options::DEF_MOSC            = false;
+const bool Options::DEF_DEFLATE         = true;
+const bool Options::DEF_SHOWINFO        = false;
+const bool Options::DEF_ASSUMETIS       = false;
+const int Options::DEF_VERBOSITY        = 1;
+const int Options::DEF_QUALITY_DECODING = 4;
+const int Options::DEF_QUALITY_ENCODING = 9;
+const int Options::DEF_THREADS          = 0;    // autodetect
+const Encoding Options::DEF_ENCODING    = Encoding::BC1;
 
 // Supported parameter names
-const char Options::ParamNames[] = "esvt:uo:zdq:j:IV";
+const char Options::ParamNames[] = "esvt:uo:zdq:j:TIV";
 
 
 Options::Options() noexcept
@@ -49,11 +50,14 @@ Options::Options() noexcept
 , m_mosc(DEF_MOSC)
 , m_deflate(DEF_DEFLATE)
 , m_showInfo(DEF_SHOWINFO)
-, m_silent(DEF_SILENT)
-, m_quality(DEF_QUALITY)
+, m_assumeTis(DEF_ASSUMETIS)
+, m_verbosity(DEF_VERBOSITY)
+, m_qualityDecoding(DEF_QUALITY_DECODING)
+, m_qualityEncoding(DEF_QUALITY_ENCODING)
 , m_threads(DEF_THREADS)
 , m_encoding(DEF_ENCODING)
 , m_inFiles()
+, m_outPath()
 , m_outFile()
 {
 }
@@ -80,10 +84,10 @@ bool Options::init(int argc, char *argv[]) noexcept
         setHaltOnError(false);
         break;
       case 's':
-        setSilence(2);
+        setVerbosity(0);
         break;
       case 'v':
-        setSilence(0);
+        setVerbosity(2);
         break;
       case 't':
         if (optarg != nullptr) {
@@ -105,7 +109,7 @@ bool Options::init(int argc, char *argv[]) noexcept
         break;
       case 'o':
         if (optarg != nullptr) {
-          setOutput(std::string(optarg, MAX_NAME_LENGTH - 1));
+          setOutput(std::string(optarg));
         } else {
           std::printf("Missing output file for -o\n");
           showHelp();
@@ -116,12 +120,27 @@ bool Options::init(int argc, char *argv[]) noexcept
         setMosc(true);
         break;
       case 'd':
-        std::printf("Warning: Parameter -d is deprecated. Use -q instead!");
+        std::printf("Warning: Parameter -d is deprecated. Use -q instead!\n");
         break;
       case 'q':
         if (optarg != nullptr) {
-          int level = std::atoi(optarg);
-          setQuality(level);
+          int levelE = DEF_QUALITY_ENCODING;
+          int levelD = DEF_QUALITY_DECODING;
+          if (optarg[0] >= '0' && optarg[0] <= '9') {
+            levelD = optarg[0] - '0';
+          } else if (optarg[0] != '-') {
+            std::printf("Error: Unrecognized decoding quality level or placeholder.\n");
+            showHelp();
+            return false;
+          }
+          if (optarg[1] >= '0' && optarg[1] <= '9') {
+            levelE = optarg[1] - '0';
+          } else if (optarg[1] != '-' && optarg[1] != 0) {
+            std::printf("Error: Unrecognized encoding quality level or placeholder.\n");
+            showHelp();
+            return false;
+          }
+          setQuality(levelE, levelD);
         } else {
           showHelp();
           return false;
@@ -135,6 +154,9 @@ bool Options::init(int argc, char *argv[]) noexcept
           showHelp();
           return false;
         }
+        break;
+      case 'T':
+        setAssumeTis(true);
         break;
       case 'I':
         setShowInfo(true);
@@ -165,8 +187,8 @@ bool Options::init(int argc, char *argv[]) noexcept
     std::printf("No input filename specified\n");
     showHelp();
     return false;
-  } else if (getInputCount() > 1 && isOutput()) {
-    std::printf("Cannot use parameter -o with multiple input files\n");
+  } else if (getInputCount() > 1 && isOutFile()) {
+    std::printf("You cannot specify output file with multiple input files\n");
     showHelp();
     return false;
   }
@@ -189,18 +211,30 @@ void Options::showHelp() noexcept
   std::printf("                2: BC2/DXT3\n");
   std::printf("                3: BC3/DXT5\n");
   std::printf("  -u          Do not apply tile compression.\n");
-  std::printf("  -o outfile  Select output file. (Works with single input file only!)\n");
+  std::printf("  -o output   Select output file or folder.\n");
+  std::printf("              (Note: Output file works only with single input file!)\n");
   std::printf("  -z          MOS only: Decompress MBC into compressed MOS (MOSC).\n");
-  std::printf("  -d          Enable color dithering. (deprecated, use -q instead!)\n");
-  std::printf("  -q level    Specify quality vs. speed ratio when converting MBC->MOS\n");
-  std::printf("              or TBC->TIS. Supported levels: 0..9 (Default: 4)\n");
+  std::printf("  -q Dec[Enc] Set quality levels for decoding and, optionally, encoding.\n");
+  std::printf("              Supported levels: 0..9 (Defaults: 4 for decoding, 9 for encoding)\n");
   std::printf("              (0=fast and lower quality, 9=slow and higher quality)\n");
-  std::printf("              Applied level-dependent features:\n");
-  std::printf("                Dithering:             levels 5 to 9\n");
-  std::printf("                Posterization:         levels 0 to 2\n");
-  std::printf("                Additional techniques: levels 4 to 9\n");
+  std::printf("              Specify both levels as a single argument. First digit indicates\n");
+  std::printf("              decoding quality and second digit indicates encoding quality.\n");
+  std::printf("              Specify '-' as placeholder for default levels.\n");
+  std::printf("              Example 1: -q 27 (decoding level: 2, encoding level: 7)\n");
+  std::printf("              Example 2: -q -7 (default decoding level, encoding level: 7)\n");
+  std::printf("              Example 3: -q 2  (decoding level: 2, default encoding level)\n");
+  std::printf("              Applied level-dependent features for encoding (DXTn only):\n");
+  std::printf("                  Iterative cluster fit:   levels 7 to 9\n");
+  std::printf("                  Single cluster fit:      levels 3 to 6\n");
+  std::printf("                  Range fit:               levels 0 to 2\n");
+  std::printf("                  Weight color by alpha:   levels 5 to 9\n");
+  std::printf("              Applied level-dependent features for decoding:\n");
+  std::printf("                  Dithering:               levels 5 to 9\n");
+  std::printf("                  Posterization:           levels 0 to 2\n");
+  std::printf("                  Additional techniques:   levels 4 to 9\n");
   std::printf("  -j num      Number of parallel jobs to speed up the conversion process.\n");
   std::printf("              Valid numbers: 0 (autodetect), 1..%d (Default: 0)\n", TileThreadPool::MAX_THREADS);
+  std::printf("  -T          Treat unrecognized input files as headerless TIS.\n");
   std::printf("  -I          Show file information and exit.\n");
   std::printf("  -V          Print version number and exit.\n\n");
   std::printf("Supported input file types: TIS, MOS, TBC, MBC\n");
@@ -210,14 +244,8 @@ void Options::showHelp() noexcept
 bool Options::addInput(const std::string &inFile) noexcept
 {
   if (!inFile.empty()) {
-    File f(inFile.c_str(), "rb");
-    if (!f.error()) {
-      for (auto iter = m_inFiles.cbegin(); iter != m_inFiles.cend(); ++iter) {
-        if (*iter == inFile) return true;
-      }
-      m_inFiles.emplace_back(std::string(inFile));
-      return true;
-    }
+    m_inFiles.emplace_back(std::string(inFile));
+    return true;
   }
   return false;
 }
@@ -254,22 +282,60 @@ const std::string& Options::getInput(int idx) const noexcept
 bool Options::setOutput(const std::string &outFile) noexcept
 {
   if (!outFile.empty()) {
-    m_outFile.assign(outFile);
+    // determining if outFile contains filename
+    std::size_t pos = 0, size = outFile.size();
+    if (!File::IsDirectory(outFile.c_str())) {
+      // splitting file name from path
+      pos = std::max(outFile.find_last_of('/'), outFile.find_last_of('\\'));
+      if (pos != std::string::npos) {
+        size = outFile.size() - pos - 1;
+        m_outFile.assign(outFile.substr(pos + 1, size));
+        size = pos;
+        pos = 0;
+      } else {
+        m_outFile.assign(outFile);
+        pos = size = 0;
+      }
+    } else {
+      m_outFile.clear();
+    }
+
+    // setting path
+    m_outPath.assign(outFile.substr(pos, size));
+    if (!m_outPath.empty()) {
+      char ch = m_outPath.back();
+      if (ch != '/' && ch != '\\') {
+        m_outPath.append("/");
+      }
+    }
     return true;
   }
   return false;
 }
 
 
-void Options::setSilence(int level) noexcept
+void Options::setVerbosity(int level) noexcept
 {
-  m_silent = std::max(0, std::min(2, level));
+  m_verbosity = std::max(0, std::min(2, level));
 }
 
 
-void Options::setQuality(int v) noexcept
+void Options::setQuality(int enc, int dec) noexcept
 {
-  m_quality = std::max(0, std::min(9, v));
+  setDecodingQuality(dec);
+  setEncodingQuality(enc);
+}
+
+
+void Options::setDecodingQuality(int v) noexcept
+{
+  m_qualityDecoding = std::max(0, std::min(9, v));
+}
+
+
+void Options::setEncodingQuality(int v) noexcept
+{
+  m_qualityEncoding = std::max(0, std::min(9, v));
 }
 
 
@@ -289,7 +355,7 @@ int Options::getThreads() const noexcept
 // ----------------------- STATIC METHODS -----------------------
 
 
-FileType Options::GetFileType(const std::string &fileName) noexcept
+FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexcept
 {
   if (!fileName.empty()) {
     File f(fileName.c_str(), "rb");
@@ -313,7 +379,16 @@ FileType Options::GetFileType(const std::string &fileName) noexcept
     } else if (std::strncmp(sig, "MBC ", 4) == 0) {
       retval = FileType::MBC;
     } else {
-      return FileType::UNKNOWN;
+      if (assumeTis) {
+        long size = f.getsize();
+        if ((size % 5120) == 0) {
+          return FileType::TIS;
+        } else {
+          return FileType::UNKNOWN;
+        }
+      } else {
+        return FileType::UNKNOWN;
+      }
     }
 
     return retval;
@@ -329,9 +404,6 @@ std::string Options::SetFileExt(const std::string &fileName, FileType type) noex
     uint32_t pos = fileName.find_last_of('.', fileName.size());
     if (pos != std::string::npos) {
       retVal.assign(fileName.substr(0, pos));
-    }
-    if (retVal.size() > MAX_NAME_LENGTH - 4) {
-      retVal.erase(retVal.size(), retVal.size() - MAX_NAME_LENGTH + 4);
     }
     switch (type) {
     case FileType::TIS:
@@ -417,48 +489,57 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
 {
   std::string sum;
 
-  if (complete || m_encoding != DEF_ENCODING || m_deflate != DEF_DEFLATE) {
+  if (complete || getEncoding() != DEF_ENCODING || isDeflate() != DEF_DEFLATE) {
     if (!sum.empty()) sum += ", ";
     sum += "pixel encoding = ";
     sum += GetEncodingName(GetEncodingCode(m_encoding, m_deflate));
   }
 
-  if (complete || m_haltOnError != DEF_HALT_ON_ERROR) {
+  if (complete || isHaltOnError() != DEF_HALT_ON_ERROR) {
     if (!sum.empty()) sum += ", ";
     sum += "halt on errors = ";
-    sum += (m_haltOnError) ? "enabled" : "disabled";
+    sum += isHaltOnError() ? "enabled" : "disabled";
   }
 
-  if (complete || m_silent != DEF_SILENT) {
+  if (complete || getVerbosity() != DEF_VERBOSITY) {
     if (!sum.empty()) sum += ", ";
     sum += "verbosity level = ";
-    if (m_silent == 0) {
-      sum += "silent";
-    }else if (m_silent == 2) {
-      sum += "verbose";
-    } else {
-      sum += "default";
+    switch (getVerbosity()) {
+      case 0:  sum += "silent"; break;
+      case 2:  sum += "verbose"; break;
+      default: sum += "default"; break;
     }
   }
 
-  if (complete || m_quality != DEF_QUALITY) {
+  if (complete || getDecodingQuality() != DEF_QUALITY_DECODING) {
     if (!sum.empty()) sum += ", ";
-    sum += "quality = " + std::to_string(m_quality);
+    sum += "decoding quality = " + std::to_string(getDecodingQuality());
   }
 
-  if (complete || m_mosc != DEF_MOSC) {
+  if (complete || getEncodingQuality() != DEF_QUALITY_ENCODING) {
     if (!sum.empty()) sum += ", ";
-    if (m_mosc) sum += "convert MBC to MOSC";
-      else sum += "convert MBC to MOS";
+    sum += "encoding quality = " + std::to_string(getEncodingQuality());
   }
 
-  if (complete || m_threads != DEF_THREADS) {
+  if (complete || isMosc() != DEF_MOSC) {
+    if (!sum.empty()) sum += ", ";
+    if (isMosc()) sum += "convert MBC to MOSC";
+    else sum += "convert MBC to MOS";
+  }
+
+  if (complete || assumeTis() != DEF_ASSUMETIS) {
+    if (!sum.empty()) sum += ", ";
+    if (assumeTis()) sum += "headerless TIS allowed";
+    else sum += "headerless TIS not allowed";
+  }
+
+  if (complete || getThreads() != DEF_THREADS) {
     if (!sum.empty()) sum += ", ";
     sum += "jobs = ";
-    if (m_threads == 0) {
+    if (getThreads() == 0) {
       sum += "autodetected (" + std::to_string(getThreadPoolAutoThreads()) + ")";
     } else {
-      sum += std::to_string(m_threads);
+      sum += std::to_string(getThreads());
     }
   }
 

@@ -31,8 +31,13 @@ THE SOFTWARE.
 class Options
 {
 public:
-  /** Attempts to determine the type of the given file. */
-  static FileType GetFileType(const std::string &fileName) noexcept;
+  /**
+   * Attempts to determine the type of the given file.
+   * \param fileName The file to check.
+   * \param assumeTis Enable to check for headerless TIS files.
+   * \return The detected file type, or FileType::UNKNOWN on error.
+   */
+  static FileType GetFileType(const std::string &fileName, bool assumeTis) noexcept;
 
   /** Returns the given input filename with the new file extension as specified by type. */
   static std::string SetFileExt(const std::string &fileName, FileType type) noexcept;
@@ -66,31 +71,36 @@ public:
   int getInputCount() const noexcept { return m_inFiles.size(); }
   const std::string& getInput(int idx) const noexcept;
 
-  /** Define output file name (for single file conversion only). */
+  /** Define output file name or path. */
   bool setOutput(const std::string &outFile) noexcept;
   /** Call to activate auto-generation of output filename. */
   void resetOutput() noexcept;
-  bool isOutput() const noexcept { return !m_outFile.empty(); }
-  const std::string& getOutput() const noexcept { return m_outFile; }
+  bool isOutPath() const noexcept { return !m_outPath.empty(); }
+  bool isOutFile() const noexcept { return !m_outFile.empty(); }
+  const std::string& getOutFile() const noexcept { return m_outFile; }
+  const std::string& getOutPath() const noexcept { return m_outPath; }
 
   /** Cancel operation on error? Only effective when processing multiple files. */
   void setHaltOnError(bool b) noexcept { m_haltOnError = b; }
   bool isHaltOnError() const noexcept { return m_haltOnError; }
 
-  /** Level of text output. 0=verbose, 1=summary only, 2=no output. */
-  void setSilence(int level) noexcept;
-  int getSilence() const noexcept { return m_silent; }
+  /** Level of text output. 2=verbose, 1=summary only, 0=no output. */
+  void setVerbosity(int level) noexcept;
+  int getVerbosity() const noexcept { return m_verbosity; }
   /** Check for specific verbosity levels. */
-  bool isSilent() const noexcept { return m_silent > 1; }
-  bool isVerbose() const noexcept { return m_silent < 1; }
+  bool isSilent() const noexcept { return m_verbosity < 1; }
+  bool isVerbose() const noexcept { return m_verbosity > 1; }
 
   /** Create MOSC files (MBC->MOS conversion only)? */
   void setMosc(bool b) noexcept { m_mosc = b; }
   bool isMosc() const noexcept { return m_mosc; }
 
-  /** Color reduction quality in range 0..9. Calculate "r = 10 - quality" to get real value. */
-  void setQuality(int v) noexcept;
-  int getQuality() const noexcept { return m_quality; }
+  /** Encoding and decoding quality. Range: [0..9] each. */
+  void setQuality(int enc, int dec) noexcept;
+  void setEncodingQuality(int v) noexcept;
+  void setDecodingQuality(int v) noexcept;
+  int getEncodingQuality() const noexcept { return m_qualityEncoding; }
+  int getDecodingQuality() const noexcept { return m_qualityDecoding; }
 
   /** Apply zlib compression to tiles? */
   void setDeflate(bool b) noexcept { m_deflate = b; }
@@ -108,6 +118,10 @@ public:
   void setEncoding(Encoding type) noexcept { m_encoding = type; }
   Encoding getEncoding() const noexcept { return m_encoding; }
 
+  /** Treat unknown input files as headerless TIS files. */
+  void setAssumeTis(bool b) noexcept { m_assumeTis = b; }
+  bool assumeTis() const noexcept { return m_assumeTis; }
+
   /**
    * Returns a string containing a list of options in textual form.
    * \param complete If false, only options differing from the defaults are listed,
@@ -117,7 +131,6 @@ public:
   std::string getOptionsSummary(bool complete) const noexcept;
 
 private:
-  static const int          MAX_NAME_LENGTH;    // max. filepath length
   static const int          MAX_THREADS;        // max. number of threads
   static const int          DEFLATE;            // !DEFLATE deflates
 
@@ -126,23 +139,28 @@ private:
   static const bool         DEF_MOSC;
   static const bool         DEF_DEFLATE;
   static const bool         DEF_SHOWINFO;
-  static const int          DEF_SILENT;
-  static const int          DEF_QUALITY;
+  static const bool         DEF_ASSUMETIS;
+  static const int          DEF_VERBOSITY;
+  static const int          DEF_QUALITY_ENCODING;
+  static const int          DEF_QUALITY_DECODING;
   static const int          DEF_THREADS;
   static const Encoding     DEF_ENCODING;
 
   static const char         ParamNames[];
 
-  bool                      m_haltOnError;  // cancel operation on error (when processing multiple files)
-  bool                      m_mosc;         // create MOSC output
-  bool                      m_deflate;      // apply zlib compression to TBC/MBC
+  bool                      m_haltOnError;      // cancel operation on error
+  bool                      m_mosc;             // create MOSC output
+  bool                      m_deflate;          // apply zlib compression to TBC/MBC
   bool                      m_showInfo;
-  int                       m_silent;       // silence level (0:verbose, 1:summary only, 2:no output)
-  int                       m_quality;      // color reduction quality (0:fast, 9:slow)
-  int                       m_threads;      // how many threads to use for encoding/decoding (0=auto)
-  Encoding                  m_encoding;     // encoding type
+  bool                      m_assumeTis;        // Treat unknown file types as headerless TIS files
+  int                       m_verbosity;        // verbosity level (2:verbose, 1:summary only, 0:no output)
+  int                       m_qualityDecoding;  // color reduction quality (0:fast, 9:slow)
+  int                       m_qualityEncoding;  // DXTn compression quality (0:fast, 9:slow)
+  int                       m_threads;          // how many threads to use for encoding/decoding
+  Encoding                  m_encoding;         // encoding type
   std::vector<std::string>  m_inFiles;
-  std::string               m_outFile;
+  std::string               m_outPath;          // file path (empty or with trailing path separator) only!
+  std::string               m_outFile;          // file name only!
 };
 
 

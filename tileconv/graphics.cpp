@@ -37,6 +37,7 @@ const char Graphics::HEADER_MOSC_SIGNATURE[4] = {'M', 'O', 'S', 'C'};
 const char Graphics::HEADER_TBC_SIGNATURE[4]  = {'T', 'B', 'C', ' '};
 const char Graphics::HEADER_MBC_SIGNATURE[4]  = {'M', 'B', 'C', ' '};
 const char Graphics::HEADER_VERSION_V1[4]     = {'V', '1', ' ', ' '};
+const char Graphics::HEADER_VERSION_V2[4]     = {'V', '2', ' ', ' '};
 const char Graphics::HEADER_VERSION_V1_0[4]   = {'V', '1', '.', '0'};
 
 const unsigned Graphics::HEADER_TBC_SIZE             = 16;
@@ -48,6 +49,7 @@ const unsigned Graphics::PALETTE_SIZE                = 1024;
 const unsigned Graphics::MAX_TILE_SIZE_8             = 64*64;
 const unsigned Graphics::MAX_TILE_SIZE_32            = 64*64*4;
 
+const unsigned Graphics::MAX_PROGRESS                = 69;
 
 Graphics::Graphics(const Options &options) noexcept
 : m_options(options)
@@ -71,50 +73,77 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
     if (!fin.error()) {
       char sig[4], ver[4];
       uint32_t tileCount, tileSize, headerSize, tileDim;
+      bool isHeaderless = false;
 
       // parsing TIS header
-      if (fin.read(sig, 1, 4) != 4) return false;;
+      if (fin.read(sig, 1, 4) != 4) return false;
       if (std::strncmp(sig, HEADER_TIS_SIGNATURE, 4) != 0) {
-        std::printf("Invalid TIS signature\n");
-        return false;
-      }
-
-      if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
-        std::printf("Invalid TIS version\n");
-        return false;
-      }
-
-      if (fin.read(&tileCount, 4, 1) != 1) return false;
-      tileCount = get32u(&tileCount);
-      if (tileCount == 0) {
-        std::printf("No tiles found\n");
-        return false;
-      }
-
-      if (fin.read(&tileSize, 4, 1) != 1) return false;
-      tileSize = get32u(&tileSize);
-      if (tileSize != 0x1400) {
-        if (tileSize == 0x000c) {
-          std::printf("PVRZ-based TIS files are not supported\n");
+        if (getOptions().assumeTis()) {
+          fin.seek(0L, SEEK_SET);
+          isHeaderless = true;
         } else {
-          std::printf("Invalid tile size\n");
+          std::printf("Invalid TIS signature\n");
+          return false;
         }
-        return false;
       }
 
-      if (fin.read(&headerSize, 4, 1) != 1) return false;
-      headerSize = get32u(&headerSize);
-      if (headerSize < 0x18) {
-        std::printf("Invalid header size\n");
-        return false;
-      }
+      if (!isHeaderless) {
+        if (fin.read(ver, 1, 4) != 4) return false;
+        if (std::strncmp(ver, HEADER_VERSION_V2, 4) == 0) {
+          if (!getOptions().isSilent()) {
+            std::printf("Warning: Incorrect TIS version 2 found. Converting anyway.\n");
+          }
+        } else if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
+          std::printf("Invalid TIS version\n");
+          return false;
+        }
 
-      if (fin.read(&tileDim, 4, 1) != 1) return false;
-      tileDim = get32u(&tileDim);
-      if (tileDim != 0x40) {
-        std::printf("Invalid tile dimensions\n");
-        return false;
+        if (fin.read(&tileCount, 4, 1) != 1) return false;
+        tileCount = get32u(&tileCount);
+        if (tileCount == 0) {
+          std::printf("No tiles found\n");
+          return false;
+        }
+
+        if (fin.read(&tileSize, 4, 1) != 1) return false;
+        tileSize = get32u(&tileSize);
+        if (tileSize != 0x1400) {
+          if (tileSize == 0x000c) {
+            std::printf("PVRZ-based TIS files are not supported\n");
+          } else {
+            std::printf("Invalid tile size\n");
+          }
+          return false;
+        }
+
+        if (fin.read(&headerSize, 4, 1) != 1) return false;
+        headerSize = get32u(&headerSize);
+        if (headerSize < 0x18) {
+          std::printf("Invalid header size\n");
+          return false;
+        }
+
+        if (fin.read(&tileDim, 4, 1) != 1) return false;
+        tileDim = get32u(&tileDim);
+        if (tileDim != 0x40) {
+          std::printf("Invalid tile dimensions\n");
+          return false;
+        }
+      } else {
+        long size = fin.getsize();
+        fin.seek(0L, SEEK_SET);
+        if (size < 0L) {
+          std::printf("Error reading input file\n");
+          return false;
+        } else if ((size % 5120) != 0) {
+          std::printf("Headerless TIS has wrong file size\n");
+          return false;
+        } else {
+          if (!getOptions().isSilent()) std::printf("Warning: Headerless TIS file detected\n");
+          tileSize = 0x1400;
+          tileDim = 0x40;
+          tileCount = (uint32_t)(size / tileSize);
+        }
       }
 
       File fout(outFile.c_str(), "wb");
@@ -131,10 +160,11 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         v32 = get32u(&tileCount);
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing tile count
         if (!getOptions().isSilent()) std::printf("Tile count: %d\n", tileCount);
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // converting tiles
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0;
+        unsigned nextTileIdx = 0, curProgress = 0;
         double ratioCount = 0.0;    // counts the compression ratios of all tiles
         for (unsigned tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
@@ -152,6 +182,9 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             double ratio = 0.0;
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
+            }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
             }
             ratioCount += ratio;
             nextTileIdx++;
@@ -188,11 +221,15 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             ratioCount += ratio;
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -266,9 +303,10 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
           std::printf("Tile count: %d, encoding: %d - %s\n",
                       tileCount, compType, Options::GetEncodingName(compType).c_str());
         }
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        uint32_t nextTileIdx = 0;
+        uint32_t nextTileIdx = 0, curProgress = 0;
         for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
           // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
@@ -282,6 +320,9 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             }
             if (!writeDecodedTisTile(retVal, fout)) {
               return false;
+            }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
             }
             nextTileIdx++;
           }
@@ -319,10 +360,14 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             if (!writeDecodedTisTile(retVal, fout)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -361,8 +406,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         Compression compression;
 
         // getting MOSC file size
-        fin.seek(0, SEEK_END);
-        moscSize = fin.tell();
+        moscSize = fin.getsize();
         if (moscSize <= 12) {
           std::printf("Invalid MOSC size\n");
           return false;
@@ -395,8 +439,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
           return false;
         }
       } else if (std::strncmp(sig, HEADER_MOS_SIGNATURE, 4) == 0) {   // loading MOS data
-        fin.seek(0, SEEK_END);
-        mosSize = fin.tell();
+        mosSize = fin.getsize();
         if (mosSize < 24) {
           std::printf("MOS size too small\n");
           return false;
@@ -493,10 +536,11 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         v32 = mosHeight; v32 = get32u(&v32);
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing MOS height
         if (getOptions().isVerbose()) std::printf("Tile count: %d\n", tileCount);
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // processing tiles
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0;
+        unsigned nextTileIdx = 0, curProgress = 0;
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
         int curIndex = 0;
         uint32_t remTileHeight = mosHeight;   // remaining tile height to cover
@@ -522,6 +566,9 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
               double ratio = 0.0;
               if (!writeEncodedTile(retVal, fout, ratio)) {
                 return false;
+              }
+              if (getOptions().getVerbosity() == 1) {
+                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
               }
               ratioCount += ratio;
               nextTileIdx++;
@@ -560,11 +607,15 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             if (!writeEncodedTile(retVal, fout, ratio)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             ratioCount += ratio;
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -668,10 +719,11 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
           std::printf("Width: %d, height: %d, columns: %d, rows: %d, encoding: %d - %s\n",
                       mosWidth, mosHeight, mosCols, mosRows, compType, Options::GetEncodingName(compType).c_str());
         }
+        if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
         uint32_t tileCount = mosCols * mosRows;
-        uint32_t nextTileIdx = 0;
+        uint32_t nextTileIdx = 0, curProgress = 0;
         int curIndex = 0;                       // the current tile index
         for (uint32_t row = 0; row < mosRows; row++) {
           for (uint32_t col = 0; col < mosCols; col++, curIndex++) {
@@ -689,6 +741,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
               }
               if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
                 return false;
+              }
+              if (getOptions().getVerbosity() == 1) {
+                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
               }
               nextTileIdx++;
             }
@@ -727,10 +782,14 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
               return false;
             }
+            if (getOptions().getVerbosity() == 1) {
+              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
+            }
             nextTileIdx++;
           }
           pool->waitForResult();
         }
+        if (getOptions().getVerbosity() == 1) std::printf("\n");
 
         if (nextTileIdx < tileCount) {
           std::printf("Missing tiles. Only %d of %d tiles converted.\n", nextTileIdx, tileCount);
@@ -862,6 +921,19 @@ bool Graphics::writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32
 }
 
 
+TileDataPtr Graphics::processTile(TileDataPtr tileData) noexcept
+{
+  if (tileData != nullptr) {
+    if (tileData->isEncoding) {
+      return encodeTile(tileData);
+    } else {
+      return decodeTile(tileData);
+    }
+  }
+  return nullptr;
+}
+
+
 TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
 {
   if (tileData != nullptr &&
@@ -872,6 +944,30 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
     uint16_t v16;                   // temp. variable (16-bit)
     uint32_t tileSizeEncoded;       // pixel encoded size of the tile
     Colors   colors(getOptions());
+
+    // setting encoding quality
+    switch (getOptions().getEncoding()) {
+      case Encoding::BC1:
+      case Encoding::BC2:
+      case Encoding::BC3:
+        switch (getOptions().getEncodingQuality()) {
+          case 0: case 1: case 2:
+            getTranscoder()->setFlags(DxtSquish::ColourRangeFit);
+            break;
+          case 3: case 4:
+            getTranscoder()->setFlags(DxtSquish::ColourClusterFit);
+            break;
+          case 5: case 6:
+            getTranscoder()->setFlags(DxtSquish::ColourClusterFit | DxtSquish::WeightColourByAlpha);
+            break;
+          default:
+            getTranscoder()->setFlags(DxtSquish::ColourIterativeClusterFit |
+                                     DxtSquish::WeightColourByAlpha);
+            break;
+        }
+      default:
+        break;
+    }
 
     tileData->size = 0;
 
@@ -931,11 +1027,7 @@ TileDataPtr Graphics::encodeTile(TileDataPtr tileData) noexcept
         v16 = (uint16_t)tileData->tileHeight; v16 = get16u(&v16); // tile height in ready-to-write format
         std::memcpy(encodedPtr, &v16, 2); encodedPtr += 2;        // setting tile height
         // encoding pixel data
-//        std::printf("Debug: Graphics::encodeTile() calling getTranscoder()->compressImage(0x%08x, 0x%08x, %d, %d, 0x%04x)\n",
-//                    (unsigned)((size_t)ptrARGB.get()), (unsigned)((size_t)encodedPtr),
-//                    tileData->tileWidth, tileData->tileHeight, getTranscoder()->getFlags());
         getTranscoder()->compressImage(ptrARGB.get(), encodedPtr, tileData->tileWidth, tileData->tileHeight);
-//        std::printf("Debug: Graphics::encodeTile() finished executing squish::CompressImage()\n");
         break;
       }
       default:
@@ -1048,3 +1140,23 @@ TileDataPtr Graphics::decodeTile(TileDataPtr tileData) noexcept
   }
   return TileDataPtr(nullptr);
 }
+
+
+unsigned Graphics::showProgress(unsigned curTile, unsigned maxTiles,
+                                unsigned curProgress, unsigned maxProgress,
+                                char symbol) const noexcept
+{
+  curTile++;
+  if (curTile > maxTiles) curTile = maxTiles;
+  if (curProgress > maxProgress) curProgress = maxProgress;
+  unsigned v = curTile*maxProgress / maxTiles;
+  while (curProgress < v) {
+    std::printf("%c", symbol);
+#ifndef WIN32
+    std::fflush(stdout);
+#endif
+    curProgress++;
+  }
+  return v;
+}
+

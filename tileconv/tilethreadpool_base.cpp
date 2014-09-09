@@ -31,16 +31,10 @@ TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
 : m_gfx(gfx)
 , m_terminate(false)
 , m_maxTiles(MAX_TILES)
-//, m_activeThreads(0)
 , m_tiles()
 , m_results()
 {
   setMaxTiles(tileNum);
-}
-
-
-TileThreadPool::~TileThreadPool() noexcept
-{
 }
 
 
@@ -49,8 +43,3 @@ void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
   m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
 }
 
-
-Graphics& TileThreadPool::getGraphics() noexcept { return m_gfx; }
-
-
-const Graphics& TileThreadPool::getGraphics() const noexcept { return m_gfx; }

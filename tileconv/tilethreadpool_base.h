@@ -23,8 +23,8 @@ THE SOFTWARE.
 #define _TILETHREADPOOL_BASE_H_
 #include <queue>
 #include "tiledata.h"
+#include "graphics.h"
 
-class Graphics;
 class TileThreadPool;
 
 typedef std::shared_ptr<TileThreadPool> ThreadPoolPtr;
@@ -60,7 +60,7 @@ public:
 //  static unsigned GetMaxTiles() noexcept;
 
 public:
-  virtual ~TileThreadPool() noexcept;
+  virtual ~TileThreadPool() noexcept {}
 
   /** Get/set max. number of tile data blocks to add. */
   unsigned getMaxTiles() const noexcept { return m_maxTiles; }
@@ -101,8 +101,8 @@ protected:
   virtual int getActiveThreads() noexcept = 0;
 
   // Access to associated Graphics instance
-  Graphics& getGraphics() noexcept;
-  const Graphics& getGraphics() const noexcept;
+  Graphics& getGraphics() noexcept { return m_gfx; }
+  const Graphics& getGraphics() const noexcept { return m_gfx; }
 
   // Access to input queue
   TileQueue& getTileQueue() noexcept { return m_tiles; }

@@ -50,8 +50,12 @@ private:
   // Display information about the specified filename
   bool showInfo(const std::string &fileName) noexcept;
 
+  // Returns whether arguments have been initialized successfully.
+  bool isInitialized() const noexcept { return m_initialized; }
+
 private:
   Options   m_options;
+  bool      m_initialized;
 };
 
 #endif
