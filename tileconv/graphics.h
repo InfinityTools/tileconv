@@ -26,8 +26,9 @@ THE SOFTWARE.
 #include "options.h"
 #include "fileio.h"
 #include "tiledata.h"
-#include "dxtbase.h"
 
+
+namespace tc {
 
 /** Provides functions for converting between TIS/MOS <-> TBC/MBC */
 class Graphics
@@ -48,15 +49,6 @@ public:
   /** Read-only access to Options structure. */
   const Options& getOptions() const noexcept { return m_options; }
 
-  /** Access to DXTn transcoder. */
-  DxtPtr& getTranscoder() noexcept { return m_transcoder; }
-
-  /**
-   * Processes the given tile data, depending on its configuration.
-   * Returns the processed tile data, or nullptr on error.
-   */
-  TileDataPtr processTile(TileDataPtr tileData) noexcept;
-
 private:
   // Called by tisToTBC() and mosToMBC() to write an encoded tile to the output file
   bool writeEncodedTile(TileDataPtr tileData, File &file, double &ratio) noexcept;
@@ -67,12 +59,6 @@ private:
   /// Called by mbcToMOS() to write a decoded tile to the output file
   bool writeDecodedMosTile(TileDataPtr tileData, BytePtr mosData, uint32_t &palOfs,
                            uint32_t &tileOfs, uint32_t &dataOfsRel, uint32_t dataOfsBase) noexcept;
-
-  // Encodes a single tile. Returns encoded tile data or nullptr on error.
-  TileDataPtr encodeTile(TileDataPtr tileData) noexcept;
-
-  // Decodes a single tile. Returns decoded tile data or nullptr on error.
-  TileDataPtr decodeTile(TileDataPtr tileData) noexcept;
 
   // Update the progression of a progress bar. Returns updated curProgress.
   unsigned showProgress(unsigned curTile, unsigned maxTiles,
@@ -85,25 +71,17 @@ public:
   static const char HEADER_MOSC_SIGNATURE[4];         // MOSC signature
   static const char HEADER_TBC_SIGNATURE[4];          // TBC signature
   static const char HEADER_MBC_SIGNATURE[4];          // MBC signature
+
   static const char HEADER_VERSION_V1[4];             // TIS/MOS file version
   static const char HEADER_VERSION_V2[4];             // TIS/MOS file version
   static const char HEADER_VERSION_V1_0[4];           // TBC/MBC file version
 
-  static const unsigned HEADER_TBC_SIZE;              // TBC header size
-  static const unsigned HEADER_MBC_SIZE;              // MBC header size
-  static const unsigned HEADER_TILE_ENCODED_SIZE;     // header size for a raw/BCx encoded tile
-  static const unsigned HEADER_TILE_COMPRESSED_SIZE;  // header size for a zlib compressed tile
-
 private:
-  static const unsigned PALETTE_SIZE;                 // palette size in bytes
-  static const unsigned MAX_TILE_SIZE_8;              // max. size (in bytes) of a 8-bit pixels tile
-  static const unsigned MAX_TILE_SIZE_32;             // max. size (in bytes) of a 32-bit pixels tile
-
   static const unsigned MAX_PROGRESS;                 // Available space for a progress bar
 
   const Options&  m_options;
-  DxtPtr          m_transcoder;
 };
 
+}   // namespace tc
 
 #endif

@@ -21,6 +21,8 @@ THE SOFTWARE.
 */
 #include "compress.h"
 
+namespace tc {
+
 Compression::Compression() noexcept
 : m_defResult(false)
 , m_infResult(false)
@@ -79,3 +81,4 @@ uint32_t Compression::inflate(uint8_t *src, uint32_t srcSize, uint8_t *dst, uint
   return 0;
 }
 
+}   // namespace tc

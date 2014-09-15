@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <cstdio>
 #include <string>
 
+namespace tc {
 
 /**
  * A simple wrapper around C-style I/O routines.
@@ -120,6 +121,8 @@ private:
   std::string   m_mode;     // current file mode
   char          *m_buffer;  // internal buffer (if used)
 };
+
+}   // namespace tc
 
 #endif
 

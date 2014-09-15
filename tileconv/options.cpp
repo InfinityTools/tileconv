@@ -27,6 +27,8 @@ THE SOFTWARE.
 #include "version.h"
 #include "options.h"
 
+namespace tc {
+
 const int Options::MAX_THREADS          = 64;
 const int Options::DEFLATE              = 256;
 
@@ -368,16 +370,16 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
       return FileType::UNKNOWN;
     }
 
-    FileType retval;
+    FileType retVal;
     if (std::strncmp(sig, "TIS ", 4) == 0) {
-      retval = FileType::TIS;
+      retVal = FileType::TIS;
     } else if (std::strncmp(sig, "MOS ", 4) == 0 ||
                std::strncmp(sig, "MOSC", 4) == 0) {
-      retval = FileType::MOS;
+      retVal = FileType::MOS;
     } else if (std::strncmp(sig, "TBC ", 4) == 0) {
-      retval = FileType::TBC;
+      retVal = FileType::TBC;
     } else if (std::strncmp(sig, "MBC ", 4) == 0) {
-      retval = FileType::MBC;
+      retVal = FileType::MBC;
     } else {
       if (assumeTis) {
         long size = f.getsize();
@@ -391,7 +393,7 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
       }
     }
 
-    return retval;
+    return retVal;
   }
   return FileType::UNKNOWN;
 }
@@ -545,3 +547,5 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
 
   return sum;
 }
+
+}   // namespace tc

@@ -19,29 +19,27 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include <algorithm>
-#include "tilethreadpool_base.h"
+#ifndef _CONVERTERFACTORY_H_
+#define _CONVERTERFACTORY_H_
+#include "converter.h"
 
 namespace tc {
 
-const unsigned TileThreadPool::MAX_THREADS  = 256u;
-const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
-
-
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
-, m_maxTiles(MAX_TILES)
-, m_tiles()
-, m_results()
+/** Creates encoder or decoder instances for the specified type. */
+class ConverterFactory
 {
-  setMaxTiles(tileNum);
-}
+public:
+  /**
+   * Returns a matching converter instance as a smart pointer.
+   * \param type The encoding type as defined in FORMAT.
+   * \return A smart pointer containing a matching Converter instance, or nullptr on error.
+   */
+  static ConverterPtr GetConverter(const Options& options, unsigned type) noexcept;
 
-
-void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
-{
-  m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
-}
+private:
+  ConverterFactory() noexcept {}
+};
 
 }   // namespace tc
+
+#endif		// _CONVERTERFACTORY_H_

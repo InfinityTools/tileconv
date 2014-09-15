@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include <sys/stat.h>
 #include <unistd.h>
 
+namespace tc {
 
 bool File::IsDirectory(const char *fileName) noexcept
 {
@@ -246,3 +247,4 @@ long File::getsize() noexcept
   return -1L;
 }
 
+}   // namespace tc

@@ -23,9 +23,12 @@ THE SOFTWARE.
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include "converter.h"
 #include "colors.h"
 #include "colorquant.h"
 #include "funcs.h"
+
+namespace tc {
 
 Colors::Colors(const Options &options) noexcept
 : m_options(options)
@@ -36,7 +39,7 @@ Colors::~Colors() noexcept
 {
 }
 
-uint32_t Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_t size) noexcept
+int Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_t size) noexcept
 {
   if (src != nullptr && palette != nullptr && dst != nullptr && size > 0) {
     for (uint32_t i = 0; i < size; i++, src++, dst += 4) {
@@ -55,14 +58,14 @@ uint32_t Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_
   return 0;
 }
 
-uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
-                           uint32_t width, uint32_t height) noexcept
+int Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
+                      uint32_t width, uint32_t height) noexcept
 {
   if (src != nullptr && dst != nullptr && palette != nullptr && width > 0 && height > 0) {
     uint32_t size = width*height;
 
     // preparing source pixels
-    reorderColors(src, size, FMT_ARGB, FMT_ABGR);
+    Converter::ReorderColors(src, size, Converter::ColorFormat::ARGB, Converter::ColorFormat::ABGR);
 
     ColorQuant quant;
     if (!quant.setSource(src, width, height)) return 0;
@@ -88,7 +91,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
         }
       }
     }
-    reorderColors(palette, 256, FMT_ABGR, FMT_ARGB);
+    Converter::ReorderColors(palette, 256, Converter::ColorFormat::ABGR, Converter::ColorFormat::ARGB);
 
     return size;
   }
@@ -96,6 +99,7 @@ uint32_t Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
 }
 
 
+/*
 uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
                           unsigned newWidth, unsigned newHeight) noexcept
 {
@@ -124,8 +128,9 @@ uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned h
   }
   return 0;
 }
+*/
 
-
+/*
 uint32_t Colors::unpadBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
                             unsigned newWidth, unsigned newHeight) noexcept
 {
@@ -143,8 +148,9 @@ uint32_t Colors::unpadBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned
   }
   return 0;
 }
+*/
 
-
+/*
 uint32_t Colors::reorderColors(uint8_t *buffer, uint32_t size,
                                ColorFormat from, ColorFormat to) noexcept
 {
@@ -199,4 +205,6 @@ uint32_t Colors::reorderColors(uint8_t *buffer, uint32_t size,
   }
   return 0;
 }
+*/
 
+}   // namespace tc

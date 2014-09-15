@@ -32,9 +32,12 @@ endif
 
 SOURCES = \
   tileconv.cpp \
-  convert.cpp \
   version.cpp \
   graphics.cpp \
+  converter.cpp \
+  converter_raw.cpp \
+  converter_dxt.cpp \
+  converterfactory.cpp \
   tilethreadpool_base.cpp \
   tilethreadpool_posix.cpp \
   tilethreadpool_win32.cpp \
@@ -43,9 +46,7 @@ SOURCES = \
   colors.cpp \
   fileio.cpp \
   colorquant.cpp \
-  options.cpp \
-  dxtbase.cpp \
-  dxtsquish.cpp
+  options.cpp
 
 OBJECTS = $(SOURCES:.cpp=.o)
 

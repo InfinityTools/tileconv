@@ -24,6 +24,8 @@ THE SOFTWARE.
 
 #include <lib/libimagequant.h>
 
+namespace tc {
+
 class ColorQuant
 {
 public:
@@ -138,5 +140,7 @@ private:
   liq_image   *m_liqImage;    // internally used, stores image data
   liq_result  *m_liqResult;   // internally used, stores quantization data
 };
+
+}   // namespace tc
 
 #endif		// _COLORQUANT_H_

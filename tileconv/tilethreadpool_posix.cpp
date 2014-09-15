@@ -23,6 +23,7 @@ THE SOFTWARE.
 #include "graphics.h"
 #include "tilethreadpool_posix.h"
 
+namespace tc {
 
 unsigned getThreadPoolAutoThreads()
 {
@@ -129,7 +130,7 @@ void TileThreadPoolPosix::threadMain() noexcept
       getTileQueue().pop();
       lockTiles.unlock();
 
-      tileData = getGraphics().processTile(tileData);
+      (*tileData)();
 
       // storing results
       lockResults.lock();
@@ -158,5 +159,7 @@ void TileThreadPoolPosix::threadDeactivated() noexcept
   std::lock_guard<std::mutex> lock(m_activeMutex);
   m_activeThreads--;
 }
+
+}   // namespace tc
 
 #endif    // USE_WINTHREADS

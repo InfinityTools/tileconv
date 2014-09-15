@@ -25,7 +25,7 @@ THE SOFTWARE.
 #include <cstdint>
 #include <zlib.h>
 
-using std::uint8_t;
+namespace tc {
 
 /** Provides zlib compression and decompression routines. */
 class Compression
@@ -60,5 +60,7 @@ private:
   z_stream  m_defStream;    // working structure for deflate
   z_stream  m_infStream;    // working structure for inflate
 };
+
+}   // namespace tc
 
 #endif

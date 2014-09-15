@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <unordered_map>
 #include "types.h"
 
+namespace tc {
 
 /** Handles options parsing and storage. */
 class Options
@@ -163,6 +164,6 @@ private:
   std::string               m_outFile;          // file name only!
 };
 
-
+}   // namespace tc
 
 #endif		// _OPTIONS_H_

@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <windows.h>
 #include "tilethreadpool_base.h"
 
+namespace tc {
 
 class TileThreadPoolWin32 : public TileThreadPool
 {
@@ -65,6 +66,8 @@ private:
   unsigned                  m_threadsNum;
   std::shared_ptr<HANDLE>   m_threads;
 };
+
+}   // namespace tc
 
 #endif    // USE_WINTHREADS
 

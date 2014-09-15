@@ -23,6 +23,8 @@ THE SOFTWARE.
 #include <algorithm>
 #include "colorquant.h"
 
+namespace tc {
+
 ColorQuant::ColorQuant() noexcept
 : m_dithering(false)
 , m_lastTransparent(false)
@@ -211,3 +213,5 @@ void ColorQuant::freeMemory() noexcept
     m_liqResult = nullptr;
   }
 }
+
+}   // namespace tc

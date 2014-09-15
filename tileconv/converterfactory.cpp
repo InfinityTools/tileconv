@@ -19,44 +19,36 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef CONVERT_H
-#define CONVERT_H
+#include "converter_raw.h"
+#include "converter_dxt.h"
+//#include "converter_tiz.h"
+//#include "converter_webp.h"
+#include "converterfactory.h"
 
-#include <string>
-#include <vector>
-#include "types.h"
-#include "options.h"
+namespace tc {
 
-
-/** High level class for converting TIS<->TBC and MOS<->MBC. */
-class Convert
+ConverterPtr ConverterFactory::GetConverter(const Options& options, unsigned type) noexcept
 {
-public:
-  // Construct an uninitialized converter object.
-  Convert() noexcept;
-  // Construct a converter object and initialize it with the specified arguments.
-  Convert(int argc, char *argv[]) noexcept;
-  ~Convert() noexcept;
+  type &= 0xff;
+  switch (type) {
+    case 0:
+      // No conversion: RAW encoder/decoder
+      return ConverterPtr(new ConverterRaw(options, type));
+    case 1:
+    case 2:
+    case 3:
+      // DXTn encoder/decoder
+      return ConverterPtr(new ConverterDxt(options, type));
+//    case 4:
+      // Pseudo type: TIZ decoder
+//      return ConverterPtr(new ConverterTiz(options, type));
+//    case 5:
+//    case 6:
+      // WebP encoder/decoder
+//      return Converterptr(new ConverterWebP(options, type));
+    default:
+      return nullptr;
+  }
+}
 
-  // Initialize the converter object with the specified arguments
-  bool init(int argc, char *argv[]) noexcept;
-
-  // Initiate conversion process
-  bool execute() noexcept;
-
-  const Options& getOptions() const noexcept { return m_options; }
-
-private:
-  // Display information about the specified filename
-  bool showInfo(const std::string &fileName) noexcept;
-
-  // Returns whether arguments have been initialized successfully.
-  bool isInitialized() const noexcept { return m_initialized; }
-
-private:
-  Options   m_options;
-  bool      m_initialized;
-};
-
-#endif
-
+}   // namespace tc
