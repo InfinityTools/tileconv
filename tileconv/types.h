@@ -27,15 +27,25 @@ THE SOFTWARE.
 
 namespace tc {
 
+// Supported pixel encoding types
+#define ENCODE_RAW  0
+#define ENCODE_DXT1 1
+#define ENCODE_DXT3 2
+#define ENCODE_DXT5 3
+//#define ENCODE_WEBP 4
+#define ENCODE_Z    255
+
 /**
  * Supported input file types:
  * UNKNOWN: Returned in case of error
  * TIS:     Paletted TIS resource type
  * MOS:     Paletted MOS resource type
- * TBC:     Compressed TIS resource type
- * MBC:     Compressed MOS resource type
+ * TBC:     Block compressed TIS resource type
+ * MBC:     Block compressed MOS resource type
+ * TIZ:     Legacy block compressed TIS resource type
+ * MOZ:     Legacy block compressed MOS resource type
  */
-enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC };
+enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC, TIZ, MOZ };
 
 /**
  * Supported pixel compression types:
@@ -44,8 +54,9 @@ enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC };
  * BC1:     Using DXT1 compression
  * BC2:     Using DXT3 compression
  * BC3:     Using DXT5 compression
+ * Z:       Compression used by the TIZ/MOZ format
  */
-enum class Encoding { UNKNOWN, RAW, BC1, BC2, BC3 };
+enum class Encoding { UNKNOWN, RAW, BC1, BC2, BC3, Z };
 
 typedef std::shared_ptr<uint8_t> BytePtr;
 

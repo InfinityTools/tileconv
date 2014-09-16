@@ -45,6 +45,10 @@ public:
   bool mosToMBC(const std::string &inFile, const std::string &outFile) noexcept;
   /** MBC->MOS conversion */
   bool mbcToMOS(const std::string &inFile, const std::string &outFile) noexcept;
+  /** TIZ->TIS conversion */
+  bool tizToTIS(const std::string &inFile, const std::string &outFile) noexcept;
+  /** TIZ->TIS conversion */
+  bool mozToMOS(const std::string &inFile, const std::string &outFile) noexcept;
 
   /** Read-only access to Options structure. */
   const Options& getOptions() const noexcept { return m_options; }
@@ -71,6 +75,12 @@ public:
   static const char HEADER_MOSC_SIGNATURE[4];         // MOSC signature
   static const char HEADER_TBC_SIGNATURE[4];          // TBC signature
   static const char HEADER_MBC_SIGNATURE[4];          // MBC signature
+
+  static const char HEADER_TIZ_SIGNATURE[4];          // TIZ signature
+  static const char HEADER_MOZ_SIGNATURE[4];          // MOZ signature
+  static const char HEADER_TIL0_SIGNATURE[4];         // TIZ/MOZ tile v0 signature
+  static const char HEADER_TIL1_SIGNATURE[4];         // TIZ/MOZ tile v1 signature
+  static const char HEADER_TIL2_SIGNATURE[4];         // TIZ/MOZ tile v2 signature
 
   static const char HEADER_VERSION_V1[4];             // TIS/MOS file version
   static const char HEADER_VERSION_V2[4];             // TIS/MOS file version

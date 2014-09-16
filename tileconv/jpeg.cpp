@@ -19,34 +19,55 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef _CONVERTER_RAW_H_
-#define _CONVERTER_RAW_H_
-#include "converter.h"
+#include "jpeg.h"
 
 namespace tc {
 
-/** Implements a dummy encoder and decoder for type Encoding::RAW. */
-class ConverterRaw : public Converter
+Jpeg::Jpeg() noexcept
+: m_handle()
 {
-public:
-  ConverterRaw(const Options& options, unsigned type) noexcept;
-  ~ConverterRaw() noexcept;
+  updateError((m_handle = tjInitDecompress()) == nullptr);
+}
 
-  bool canEncode() const noexcept { return true; }
-  bool canDecode() const noexcept { return true; }
-  bool deflateAllowed() const noexcept { return true; }
+Jpeg::~Jpeg() noexcept
+{
+  if (m_handle != nullptr) {
+    tjDestroy(m_handle);
+    m_handle = nullptr;
+  }
+}
 
-  /** See Converter::getRequiredSpace() */
-  int getRequiredSpace(int width, int height) const noexcept;
 
-  /** See Converter::convert() */
-  int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept;
+bool Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, uint8_t *dstBuf,
+                      PixelFormat pf, int flags) noexcept
+{
+  bool retVal = false;
+  if (m_handle != nullptr && srcBuf != nullptr && srcBufSize > 0 && dstBuf != nullptr) {
+    retVal = (tjDecompress2(m_handle, srcBuf, srcBufSize, dstBuf, 0, 0, 0, pf, flags) == 0);
+    updateError(!retVal);
+  }
+  return retVal;
+}
 
-protected:
-  // See Converter::isTypeValid()
-  bool isTypeValid() const noexcept;
-};
+
+bool Jpeg::updateInformation(uint8_t *buf, size_t bufSize) noexcept
+{
+  bool retVal = false;
+  if (m_handle != nullptr && buf != nullptr && bufSize > 0) {
+    retVal = (tjDecompressHeader2(m_handle, buf, bufSize, &m_width, &m_height, &m_subSampling) == 0);
+    updateError(!retVal);
+  }
+  return retVal;
+}
+
+
+std::string Jpeg::getErrorMsg() const noexcept
+{
+  if (isError()) {
+    return std::string(tjGetErrorStr());
+  } else {
+    return std::string("");
+  }
+}
 
 }   // namespace tc
-
-#endif		// _CONVERTER_RAW_H_

@@ -213,6 +213,64 @@ bool TileConv::execute() noexcept
             }
           }
           break;
+        case FileType::TIZ:
+          // generating output filename
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
+          } else {
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TIS);
+          }
+          if (outputFile.empty()) {
+            retVal = false;
+            std::printf("Error creating output filename\n");
+            if (getOptions().isHaltOnError()) {
+              return retVal;
+            } else {
+              break;
+            }
+          }
+          // converting
+          if (!getOptions().isSilent()) {
+            std::printf("Converting TIZ -> TIS\n");
+            std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
+          }
+          if (!gfx.tizToTIS(inputFile, outputFile)) {
+            retVal = false;
+            std::printf("Error while converting \"%s\"\n", inputFile.c_str());
+            if (getOptions().isHaltOnError()) {
+              return retVal;
+            }
+          }
+          break;
+        case FileType::MOZ:
+          // generating output filename
+          if (getOptions().isOutFile()) {
+            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
+          } else {
+            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MOS);
+          }
+          if (outputFile.empty()) {
+            retVal = false;
+            std::printf("Error creating output filename\n");
+            if (getOptions().isHaltOnError()) {
+              return retVal;
+            } else {
+              break;
+            }
+          }
+          // converting
+          if (!getOptions().isSilent()) {
+            std::printf("Converting MOZ -> MOS\n");
+            std::printf("Input: \"%s\", output: \"%s\"\n", inputFile.c_str(), outputFile.c_str());
+          }
+          if (!gfx.mozToMOS(inputFile, outputFile)) {
+            retVal = false;
+            std::printf("Error while converting \"%s\"\n", inputFile.c_str());
+            if (getOptions().isHaltOnError()) {
+              return retVal;
+            }
+          }
+          break;
         default:
           retVal = false;
           std::printf("Unsupported file type: \"%s\"\n", inputFile.c_str());
@@ -246,9 +304,9 @@ bool TileConv::showInfo(const std::string &fileName) noexcept
           return false;
         }
         if (f.read(&tileNum, 4, 1) != 1) return false;
-        tileNum = get32u(&tileNum);
+        tileNum = get32u_le(&tileNum);
         if (f.read(&tileSize, 4, 1) != 1) return false;
-        tileSize = get32u(&tileSize);
+        tileSize = get32u_le(&tileSize);
 
         // Displaying TIS stats
         std::printf("File type:       TIS\n");
@@ -287,7 +345,7 @@ bool TileConv::showInfo(const std::string &fileName) noexcept
             return false;
           }
           if (f.read(&mosSize, 4, 1) != 1) return false;
-          mosSize = get32u(&mosSize);
+          mosSize = get32u_le(&mosSize);
           if (mosSize < 24) {
             std::printf("MOS size too small.\n");
             return false;
@@ -344,9 +402,9 @@ bool TileConv::showInfo(const std::string &fileName) noexcept
           return false;
         }
         if (f.read(&compType, 4, 1) != 1) return false;
-        compType = get32u(&compType);
+        compType = get32u_le(&compType);
         if (f.read(&tileNum, 4, 1) != 1) return false;
-        tileNum = get32u(&tileNum);
+        tileNum = get32u_le(&tileNum);
 
         // Displaying TBC stats
         std::printf("File type:       TBC\n");
@@ -362,18 +420,45 @@ bool TileConv::showInfo(const std::string &fileName) noexcept
           return false;
         }
         if (f.read(&compType, 4, 1) != 1) return false;
-        compType = get32u(&compType);
+        compType = get32u_le(&compType);
         if (f.read(&width, 4, 1) != 1) return false;
-        width = get32u(&width);
+        width = get32u_le(&width);
         if (f.read(&height, 4, 1) != 1) return false;
-        height = get32u(&height);
+        height = get32u_le(&height);
 
-        tileNum = (((width+63) & 63)*((height+63) & 63)) / 4096;
+        tileNum = ((width+63) >> 6)*((height+63) >> 6);
 
         // Displaying TBC stats
         std::printf("File type:       MBC\n");
         std::printf("MBC version:     1.0\n");
         std::printf("Compression:     0x%04x - %s\n", compType, Options::GetEncodingName(compType).c_str());
+        std::printf("Width:           %d\n", width);
+        std::printf("Height:          %d\n", height);
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else if (std::strncmp(sig, Graphics::HEADER_TIZ_SIGNATURE, 4) == 0) {
+        // Parsing TIZ file
+        uint16_t tileNum;
+        if (f.read(&tileNum, 2, 1) != 1) return false;
+        tileNum = get16u_be(&tileNum);
+
+        // Displaying TIZ stats
+        std::printf("File type:       TIZ\n");
+        std::printf("Format version:  0\n");
+        std::printf("Number of tiles: %d\n", tileNum);
+      } else if (std::strncmp(sig, Graphics::HEADER_MOZ_SIGNATURE, 4) == 0) {
+        // Parsing MOZ file
+        uint16_t width, height;
+        int tileNum;
+        if (f.read(&width, 2, 1) != 1) return false;
+        width = get16u_be(&width);
+        if (f.read(&height, 2, 1) != 1) return false;
+        height = get16u_be(&height);
+
+        tileNum = ((width+63) >> 6)*((height+63) >> 6);
+
+        // Displaying MOZ stats
+        std::printf("File type:       MOZ\n");
+        std::printf("Format version:  0\n");
         std::printf("Width:           %d\n", width);
         std::printf("Height:          %d\n", height);
         std::printf("Number of tiles: %d\n", tileNum);

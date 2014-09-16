@@ -127,16 +127,9 @@ void TileData::encode() noexcept
         return;
       }
       BytePtr  ptrEncoded(new uint8_t[tileSizeEncoded], std::default_delete<uint8_t[]>());
-      uint16_t v16;
       setSize(0);
 
-      uint8_t *encodedPtr = ptrEncoded.get();
-      v16 = (uint16_t)getWidth(); v16 = get16u(&v16);    // tile width in ready-to-write format
-      *((uint16_t*)encodedPtr) = v16; encodedPtr += 2;   // setting tile width
-      v16 = (uint16_t)getHeight(); v16 = get16u(&v16);   // tile height in ready-to-write format
-      *((uint16_t*)encodedPtr) = v16; encodedPtr += 2;   // setting tile height
-
-      if (!converter->convert(getPaletteData().get(), getIndexedData().get(), encodedPtr,
+      if (!converter->convert(getPaletteData().get(), getIndexedData().get(), ptrEncoded.get(),
                               getWidth(), getHeight())) {
         setError(true);
         setErrorMsg("Error while encoding tile data\n");
@@ -189,20 +182,15 @@ void TileData::decode() noexcept
         std::memcpy(ptrEncoded.get(), getDeflatedData().get(), getSize());
       }
 
-      setSize(0);
-
-      // retrieving tile dimensions
-      setWidth(get16u((uint16_t*)ptrEncoded.get()));
-      setHeight(get16u((uint16_t*)(ptrEncoded.get()+2)));
-
       setSize(converter->convert(getPaletteData().get(), getIndexedData().get(),
-                                 ptrEncoded.get() + HEADER_TILE_ENCODED_SIZE,
-                                 getWidth(), getHeight()));
+                                 ptrEncoded.get()));
       if (getSize() == 0) {
         setError(true);
         setErrorMsg("Error while decoding tile data\n");
         return;
       }
+      setWidth(converter->getWidth());
+      setHeight(converter->getHeight());
     } else {
       setError(true);
       setErrorMsg("Unsupported source format found\n");

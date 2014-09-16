@@ -30,12 +30,32 @@ Converter::Converter(const Options& options, unsigned type) noexcept
 , m_encoding(true)
 , m_colorFormat(ColorFormat::ARGB)
 , m_type(type)
+, m_width()
+, m_height()
 {
 }
 
 
 Converter::~Converter() noexcept
 {
+}
+
+
+void Converter::setWidth(int w) noexcept
+{
+  m_width = std::max(0, w);
+}
+
+
+void Converter::setHeight(int h) noexcept
+{
+  m_height = std::max(0, h);
+}
+
+
+int Converter::convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept
+{
+  return convert(palette, indexed, encoded, 0, 0);
 }
 
 
@@ -107,7 +127,7 @@ bool Converter::ReorderColors(uint8_t *buffer, unsigned numPixels,
           case ColorFormat::ABGR: c0 = 16; c2 = -16; break;
           case ColorFormat::BGRA: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
           case ColorFormat::RGBA: c0 = 8; c1 = 8; c2 = 8; c3 = -24; break;
-          default: break;
+          default: return true;
         }
         break;
       case ColorFormat::ABGR:
@@ -115,7 +135,7 @@ bool Converter::ReorderColors(uint8_t *buffer, unsigned numPixels,
           case ColorFormat::ARGB: c0 = 16; c2 = -16; break;
           case ColorFormat::BGRA: c0 = 8; c1 = 8; c2 = 8; c3 = -24; break;
           case ColorFormat::RGBA: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
-          default: break;
+          default: return true;
         }
         break;
       case ColorFormat::BGRA:
@@ -123,7 +143,7 @@ bool Converter::ReorderColors(uint8_t *buffer, unsigned numPixels,
           case ColorFormat::ARGB: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
           case ColorFormat::ABGR: c0 = 24; c1 = -8; c2 = -8; c3 = -8; break;
           case ColorFormat::RGBA: c1 = 16; c3 = -16; break;
-          default: break;
+          default: return true;
         }
         break;
       case ColorFormat::RGBA:
@@ -131,20 +151,20 @@ bool Converter::ReorderColors(uint8_t *buffer, unsigned numPixels,
           case ColorFormat::ARGB: c0 = 24; c1 = -8; c2 = -8; c3 = -8; break;
           case ColorFormat::ABGR: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
           case ColorFormat::BGRA: c1 = 16; c3 = -16; break;
-          default: break;
+          default: return true;
         }
         break;
     }
 
     uint32_t *src = (uint32_t*)buffer;
     for (unsigned i = 0; i < numPixels; i++, src++) {
-      uint32_t srcPixel = get32u(src);
+      uint32_t srcPixel = get32u_le(src);
       uint32_t dstPixel = 0;
       dstPixel |= (srcPixel & 0x000000ff) << c0;
       dstPixel |= (c1 < 0) ? (srcPixel & 0x0000ff00) >> c1 : (srcPixel & 0x0000ff00) << c1;
       dstPixel |= (c2 < 0) ? (srcPixel & 0x00ff0000) >> c2 : (srcPixel & 0x00ff0000) << c2;
       dstPixel |= (srcPixel & 0xff000000) >> c3;
-      *src = get32u(&dstPixel);
+      *src = get32u_le(&dstPixel);
     }
 
     return true;

@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include <cstring>
+#include "funcs.h"
 #include "converter_raw.h"
 
 namespace tc {
@@ -44,30 +45,28 @@ int ConverterRaw::getRequiredSpace(int width, int height) const noexcept
 }
 
 
-int ConverterRaw::convert(uint8_t *src, uint8_t *dst, int width, int height) noexcept
-{
-  // No conversion needed
-  if (src != nullptr && dst != nullptr && width > 0 && height > 0) {
-    std::memcpy(dst, src, getRequiredSpace(width, height));
-    return getRequiredSpace(width, height);
-  }
-  return 0;
-}
-
-
 int ConverterRaw::convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept
 {
-  if (palette != nullptr && indexed != nullptr && encoded != nullptr && width > 0 && height > 0) {
-    if (isEncoding()) {
+  if (palette != nullptr && indexed != nullptr && encoded != nullptr) {
+    if (isEncoding() && width > 0 && height > 0) {
+      uint16_t v16;
+      // initializing pixel encoding header
+      v16 = (uint16_t)width; *((uint16_t*)encoded) = get16u_le(&v16); encoded += 2;
+      v16 = (uint16_t)height; *((uint16_t*)encoded) = get16u_le(&v16); encoded += 2;
+      setWidth(width); setHeight(height);
+      // encoding graphics
       std::memcpy(encoded, palette, 1024);
       ReorderColors(encoded, 256, getColorFormat(), ColorFormat::ARGB);
-      std::memcpy(encoded+1024, indexed, width*height);
-    } else {
-      std::memcpy(palette, encoded, 1024);
+      std::memcpy(encoded+1024, indexed, getWidth()*getHeight());
+      return getRequiredSpace(getWidth(), getHeight()) + HEADER_TILE_ENCODED_SIZE;
+    } else if (!isEncoding()) {
+      setWidth(get16u_le((uint16_t*)encoded));
+      setHeight(get16u_le((uint16_t*)(encoded+2)));
+      std::memcpy(palette, encoded+4, 1024);
       ReorderColors(palette, 256, getColorFormat(), ColorFormat::ARGB);
-      std::memcpy(indexed, encoded+1024, width*height);
+      std::memcpy(indexed, encoded+1024+4, getWidth()*getHeight());
+      return getRequiredSpace(getWidth(), getHeight());
     }
-    return getRequiredSpace(width, height);
   }
   return 0;
 }

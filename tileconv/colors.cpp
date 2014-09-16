@@ -44,7 +44,7 @@ int Colors::palToARGB(uint8_t *src, uint8_t *palette, uint8_t *dst, uint32_t siz
   if (src != nullptr && palette != nullptr && dst != nullptr && size > 0) {
     for (uint32_t i = 0; i < size; i++, src++, dst += 4) {
       uint32_t ofs = (uint32_t)src[0] << 2;
-      if (src[0] || get32u((uint32_t*)palette) != 0x0000ff00) {
+      if (src[0] || get32u_le((uint32_t*)palette) != 0x0000ff00) {
         dst[0] = palette[ofs+0];
         dst[1] = palette[ofs+1];
         dst[2] = palette[ofs+2];
@@ -97,114 +97,5 @@ int Colors::ARGBToPal(uint8_t *src, uint8_t *dst, uint8_t *palette,
   }
   return 0;
 }
-
-
-/*
-uint32_t Colors::padBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
-                          unsigned newWidth, unsigned newHeight) noexcept
-{
-  if (src != nullptr && dst != nullptr && width > 0 && height > 0 && newWidth >= width &&
-      newHeight >= height && (newWidth & 3) == 0 && (newHeight & 3) == 0) {
-
-    for (unsigned y = 0; y < height; y++) {
-      for (unsigned x = 0; x < width; x++, src += 4, dst += 4) {
-        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-      }
-      // padding horizontally with previously used values
-      for (unsigned x = width; x < newWidth; x++, dst += 4) {
-        dst[0] = dst[-4]; dst[1] = dst[-3]; dst[2] = dst[-2]; dst[3] = dst[-1];
-      }
-    }
-
-    // padding vertically with previously used values
-    int shift = -(newWidth * 4);  // offset into previous line
-    for (unsigned y = height; y < newHeight; y++) {
-      for (unsigned x = 0; x < newWidth; x++, dst += 4) {
-        dst[0] = dst[shift+0]; dst[1] = dst[shift+1]; dst[2] = dst[shift+2]; dst[3] = dst[shift+3];
-      }
-    }
-
-    return newWidth*newHeight;
-  }
-  return 0;
-}
-*/
-
-/*
-uint32_t Colors::unpadBlock(uint8_t *src, uint8_t *dst, unsigned width, unsigned height,
-                            unsigned newWidth, unsigned newHeight) noexcept
-{
-  if (src != nullptr && dst != nullptr && width > 0 && height > 0 &&
-      newWidth > 0 && newHeight > 0 &&
-      newWidth <= width && newHeight <= height &&
-      (width & 3) == 0 && (height & 3) == 0) {
-
-    for (unsigned y = 0; y < newHeight; y++, src += (width-newWidth)*4) {
-      for (unsigned x = 0; x < newWidth; x++, src += 4, dst += 4) {
-        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-      }
-    }
-    return newWidth*newHeight;
-  }
-  return 0;
-}
-*/
-
-/*
-uint32_t Colors::reorderColors(uint8_t *buffer, uint32_t size,
-                               ColorFormat from, ColorFormat to) noexcept
-{
-  if (buffer != nullptr && size > 0) {
-    int c0 = 0, c1 = 0, c2 = 0, c3 = 0;   // defines how much to shift each component
-    switch (from) {
-      case FMT_ARGB:
-        switch (to) {
-          case FMT_ABGR: c0 = 16; c2 = -16; break;
-          case FMT_BGRA: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
-          case FMT_RGBA: c0 = 8; c1 = 8; c2 = 8; c3 = -24; break;
-          default: break;
-        }
-        break;
-      case FMT_ABGR:
-        switch (to) {
-          case FMT_ARGB: c0 = 16; c2 = -16; break;
-          case FMT_BGRA: c0 = 8; c1 = 8; c2 = 8; c3 = -24; break;
-          case FMT_RGBA: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
-          default: break;
-        }
-        break;
-      case FMT_BGRA:
-        switch (to) {
-          case FMT_ARGB: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
-          case FMT_ABGR: c0 = 24; c1 = -8; c2 = -8; c3 = -8; break;
-          case FMT_RGBA: c1 = 16; c3 = -16; break;
-          default: break;
-        }
-        break;
-      case FMT_RGBA:
-        switch (to) {
-          case FMT_ARGB: c0 = 24; c1 = -8; c2 = -8; c3 = -8; break;
-          case FMT_ABGR: c0 = 24; c1 = 8; c2 = -8; c3 = -24; break;
-          case FMT_BGRA: c1 = 16; c3 = -16; break;
-          default: break;
-        }
-        break;
-    }
-
-    uint32_t* src = (uint32_t*)buffer;
-    for (uint32_t i = 0; i < size; i++, src++) {
-      uint32_t srcPixel = get32u(src);
-      uint32_t dstPixel = 0;
-      dstPixel |= (srcPixel & 0x000000ff) << c0;
-      dstPixel |= (c1 < 0) ? (srcPixel & 0x0000ff00) >> c1 : (srcPixel & 0x0000ff00) << c1;
-      dstPixel |= (c2 < 0) ? (srcPixel & 0x00ff0000) >> c2 : (srcPixel & 0x00ff0000) << c2;
-      dstPixel |= (srcPixel & 0xff000000) >> c3;
-      *src = get32u(&dstPixel);
-    }
-    return size;
-  }
-  return 0;
-}
-*/
 
 }   // namespace tc

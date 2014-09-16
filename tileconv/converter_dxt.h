@@ -32,6 +32,10 @@ public:
   ConverterDxt(const Options& options, unsigned type) noexcept;
   ~ConverterDxt() noexcept;
 
+  bool canEncode() const noexcept { return true; }
+  bool canDecode() const noexcept { return true; }
+  bool deflateAllowed() const noexcept { return true; }
+
   /** See Converter::getRequiredSpace() */
   int getRequiredSpace(int width, int height) const noexcept;
 
@@ -39,7 +43,6 @@ public:
   int getPaddedValue(int v) const noexcept;
 
   /** See Converter::convert() */
-  int convert(uint8_t *src, uint8_t *dst, int width, int height) noexcept;
   int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept;
 
 protected:
@@ -47,6 +50,11 @@ protected:
   bool isTypeValid() const noexcept;
 
 private:
+
+  // Performs pixel encoding/decoding on the given graphics data
+  int encodeTile(uint8_t *src, uint8_t *dst, int width, int height) noexcept;
+  int decodeTile(uint8_t *src, uint8_t *dst, int width, int height) noexcept;
+
   // Returns squish flags based on type and quality.
   int getFlags() const noexcept;
 

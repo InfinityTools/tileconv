@@ -36,6 +36,14 @@ public:
 public:
   virtual ~Converter() noexcept;
 
+  /** Indicates support for decoding pixel data. */
+  virtual bool canEncode() const noexcept = 0;
+  /** Indicates support for decoding pixel data. */
+  virtual bool canDecode() const noexcept = 0;
+
+  /** Returns whether deflating pixel encoded tiles may further reduce size. */
+  virtual bool deflateAllowed() const noexcept = 0;
+
   /** Read-only access to options. */
   const Options& getOptions() const noexcept { return m_options; }
 
@@ -51,6 +59,10 @@ public:
   void setColorFormat(ColorFormat fmt) noexcept { m_colorFormat = fmt; }
   ColorFormat getColorFormat() const noexcept { return m_colorFormat; }
 
+  /** Returns image dimensions in pixels. (Implementation-specific). */
+  int getWidth() const noexcept { return m_width; }
+  int getHeight() const noexcept { return m_height; }
+
   /**
    * Returns the required space of the currently selected pixel encoding type for the given
    * image dimensions, or 0 on error.
@@ -59,16 +71,6 @@ public:
 
   /** Returns the given value expanded to the nearest supported value. (implementation-specific) */
   virtual int getPaddedValue(int v) const noexcept { return v; }
-
-  /**
-   * Executes the conversion process.
-   * \param src Pointer to source data.
-   * \param dst Pointer to storage space for the converted data.
-   * \param width Block width in pixels.
-   * \param height Block height in pixels.
-   * \return Total size of resulting data or 0 on error.
-   */
-  virtual int convert(uint8_t *src, uint8_t *dst, int width, int height) noexcept = 0;
 
   /**
    * Executes the conversion process. palette/indexed pixels are either source (encoding) or
@@ -82,6 +84,8 @@ public:
    */
   virtual int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept = 0;
 
+  /** Short-hand conversion method for decoding. (Dimensions are retrieved from data.) */
+  int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
 
   /**
    * Dimensions of a pixel data block will be expanded to the specified dimensions.
@@ -127,11 +131,17 @@ protected:
   // Returns whether the specified encoding type is supported by the implementation.
   virtual bool isTypeValid() const noexcept = 0;
 
+  // Set image dimensions
+  void setWidth(int w) noexcept;
+  void setHeight(int h) noexcept;
+
 private:
   const Options&  m_options;      // read-only access to options
   bool            m_encoding;     // indicates conversion type (encoding to or decoding from)
   ColorFormat     m_colorFormat;  // color format for input/output pixel data
   int             m_type;         // encoding type
+  int             m_width;
+  int             m_height;
 };
 
 typedef std::shared_ptr<Converter> ConverterPtr;

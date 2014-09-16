@@ -62,76 +62,28 @@ int ConverterDxt::getPaddedValue(int v) const noexcept
 }
 
 
-int ConverterDxt::convert(uint8_t *src, uint8_t *dst, int width, int height) noexcept
-{
-  if (src != nullptr && dst != nullptr && width > 0 && height > 0) {
-    uint8_t  block[64];
-    uint8_t  paddedBlock[64];
-    int blockSize = getRequiredSpace(4, 4);
-    int stride = width << 2;
-    int srcOfs = 0;
-    int dstOfs = 0;
-
-    if (isEncoding()) {
-      // encoding blocks
-      for (int y = 0; y < height; y += 4) {
-        int bh = std::min(4, height-y);
-        for (int x = 0; x < width; x += 4) {
-          int bw = std::min(4, width-x);
-          for (int by = 0, bofs = 0, sofs = srcOfs; by < bh; by++, bofs += bw << 2, sofs += stride) {
-            std::memcpy(&block[bofs], src+sofs, bw << 2);
-          }
-          PadBlock(block, paddedBlock, bw, bh, 4, 4, false);
-          if (!compressBlock(paddedBlock, dst+dstOfs)) return false;
-
-          srcOfs += bw << 2;
-          dstOfs += blockSize;
-        }
-        srcOfs += 3*stride;
-      }
-      return getRequiredSpace(width, height);
-    } else {
-      // decoding blocks
-      for (int y = 0; y < height; y += 4) {
-        int bh = std::min(4, height-y);
-        for (int x = 0; x < width; x += 4) {
-          int bw = std::min(4, width-x);
-          if (!decompressBlock(src+srcOfs, paddedBlock)) return false;
-          UnpadBlock(paddedBlock, block, 4, 4, bw, bh);
-          for (int by = 0, bofs = 0, dofs = dstOfs; by < bh; by++, bofs += bw << 2, dofs += stride) {
-            std::memcpy(dst+dofs, &block[bofs], bw << 2);
-          }
-
-          srcOfs += blockSize;
-          dstOfs += bw << 2;
-        }
-        dstOfs += 3*stride;
-      }
-      return width*height*4;
-    }
-  }
-  return 0;
-}
-
-
 int ConverterDxt::convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept
 {
-  if (palette != nullptr && indexed != nullptr && encoded != nullptr && width > 0 && height > 0) {
-    BytePtr ptrARGB(new uint8_t[width*height*4], std::default_delete<uint8_t[]>());
+  if (palette != nullptr && indexed != nullptr && encoded != nullptr) {
     Colors colors(getOptions());
 
-    if (isEncoding()) {
+    if (isEncoding() && width > 0 && height > 0) {
       // Paletted -> Encoded
+      setWidth(width); setHeight(height);
+      BytePtr ptrARGB(new uint8_t[getWidth()*getHeight()*4], std::default_delete<uint8_t[]>());
       ReorderColors(palette, 256, getColorFormat(), ColorFormat::ARGB);
-      colors.palToARGB(indexed, palette, ptrARGB.get(), width*height);
-      ReorderColors(ptrARGB.get(), width*height, ColorFormat::ARGB, getColorFormat());
-      return convert(ptrARGB.get(), encoded, width, height);
-    } else {
+      colors.palToARGB(indexed, palette, ptrARGB.get(), getWidth()*getHeight());
+      ReorderColors(ptrARGB.get(), getWidth()*getHeight(), ColorFormat::ARGB, getColorFormat());
+      return encodeTile(ptrARGB.get(), encoded, getWidth(), getHeight());
+    } else if (!isEncoding()) {
       // Encoded -> Paletted
-      if (convert(encoded, ptrARGB.get(), width, height) > 0) {
-        ReorderColors(ptrARGB.get(), width*height, getColorFormat(), ColorFormat::ARGB);
-        if (colors.ARGBToPal(ptrARGB.get(), indexed, palette, width, height) == width*height) {
-          return 1024 + width*height;
+      setWidth(get16u_le((uint16_t*)encoded)); encoded += 2;
+      setHeight(get16u_le((uint16_t*)encoded)); encoded += 2;
+      BytePtr ptrARGB(new uint8_t[getWidth()*getHeight()*4], std::default_delete<uint8_t[]>());
+      if (decodeTile(encoded, ptrARGB.get(), getWidth(), getHeight()) > 0) {
+        ReorderColors(ptrARGB.get(), getWidth()*getHeight(), getColorFormat(), ColorFormat::ARGB);
+        if (colors.ARGBToPal(ptrARGB.get(), indexed, palette, getWidth(), getHeight()) == getWidth()*getHeight()) {
+          return 1024 + getWidth()*getHeight();
         }
       }
     }
@@ -151,6 +103,76 @@ bool ConverterDxt::isTypeValid() const noexcept
       break;
   }
   return false;
+}
+
+
+int ConverterDxt::encodeTile(uint8_t *src, uint8_t *dst, int width, int height) noexcept
+{
+  if (isEncoding() && src != nullptr && dst != nullptr && width > 0 && height > 0) {
+    uint8_t  block[64];
+    uint8_t  paddedBlock[64];
+    int blockSize = getRequiredSpace(4, 4);
+    int stride;
+    int srcOfs = 0;
+    int dstOfs = 0;
+    uint16_t v16;
+
+    // initializing pixel encoding header
+    v16 = (uint16_t)width; *((uint16_t*)dst) = get16u_le(&v16); dst += 2;
+    v16 = (uint16_t)height; *((uint16_t*)dst) = get16u_le(&v16); dst += 2;
+
+    // encoding graphics
+    stride = getWidth() << 2;
+    for (int y = 0; y < getHeight(); y += 4) {
+      int bh = std::min(4, getHeight()-y);
+      for (int x = 0; x < getWidth(); x += 4) {
+        int bw = std::min(4, getWidth()-x);
+        for (int by = 0, bofs = 0, sofs = srcOfs; by < bh; by++, bofs += bw << 2, sofs += stride) {
+          std::memcpy(&block[bofs], src+sofs, bw << 2);
+        }
+        PadBlock(block, paddedBlock, bw, bh, 4, 4, false);
+        if (!compressBlock(paddedBlock, dst+dstOfs)) return false;
+
+        srcOfs += bw << 2;
+        dstOfs += blockSize;
+      }
+      srcOfs += 3*stride;
+    }
+    return getRequiredSpace(getWidth(), getHeight()) + HEADER_TILE_ENCODED_SIZE;
+  }
+  return 0;
+}
+
+
+int ConverterDxt::decodeTile(uint8_t *src, uint8_t *dst, int width, int height) noexcept
+{
+  if (!isEncoding() && src != nullptr && dst != nullptr && width > 0 && height > 0) {
+    uint8_t  block[64];
+    uint8_t  paddedBlock[64];
+    int blockSize = getRequiredSpace(4, 4);
+    int stride = width << 2;
+    int srcOfs = 0;
+    int dstOfs = 0;
+
+    // decoding blocks
+    for (int y = 0; y < height; y += 4) {
+      int bh = std::min(4, height-y);
+      for (int x = 0; x < width; x += 4) {
+        int bw = std::min(4, width-x);
+        if (!decompressBlock(src+srcOfs, paddedBlock)) return false;
+        UnpadBlock(paddedBlock, block, 4, 4, bw, bh);
+        for (int by = 0, bofs = 0, dofs = dstOfs; by < bh; by++, bofs += bw << 2, dofs += stride) {
+          std::memcpy(dst+dofs, &block[bofs], bw << 2);
+        }
+
+        srcOfs += blockSize;
+        dstOfs += bw << 2;
+      }
+      dstOfs += 3*stride;
+    }
+    return width*height*4;
+  }
+  return 0;
 }
 
 
@@ -230,10 +252,10 @@ bool ConverterDxt::decodeBlockDxt1(uint8_t *src, uint8_t *dst) noexcept
 {
   if (src != nullptr && dst != nullptr) {
     uint8_t block[8];
-    uint16_t c0 = get16u((uint16_t*)(src));
-    uint16_t c1 = get16u((uint16_t*)(&src[2]));
+    uint16_t c0 = get16u_le((uint16_t*)(src));
+    uint16_t c1 = get16u_le((uint16_t*)(&src[2]));
     if (!unpackColors565(src, block)) return false;
-    int code = get32u((uint32_t*)(&src[4]));
+    int code = get32u_le((uint32_t*)(&src[4]));
     for (unsigned idx = 0; idx < 16; idx++, code >>= 2, dst += 4) {
       switch (code & 3) {
         case 0:
@@ -286,9 +308,9 @@ bool ConverterDxt::decodeBlockDxt3(uint8_t *src, uint8_t *dst) noexcept
 {
   if (src != nullptr && dst != nullptr) {
     uint8_t block[8];
-    uint64_t alpha = get64u((uint64_t*)src);
+    uint64_t alpha = get64u_le((uint64_t*)src);
     if (!unpackColors565(&src[8], block)) return false;
-    int code = get32u((uint32_t*)(&src[12]));
+    int code = get32u_le((uint32_t*)(&src[12]));
     for (unsigned idx = 0; idx < 16; idx++, code >>= 2, alpha >>= 4, dst += 4) {
       // pre-setting alpha
       dst[3] = (uint8_t)((alpha & 0x0f) | (alpha & 0x0f) << 4);
@@ -329,7 +351,7 @@ bool ConverterDxt::decodeBlockDxt5(uint8_t *src, uint8_t *dst) noexcept
   if (src != nullptr && dst != nullptr) {
     uint8_t block[8];
     // generating alpha table
-    uint64_t ctrl = get64u((uint64_t*)&src[2]);
+    uint64_t ctrl = get64u_le((uint64_t*)&src[2]);
     uint8_t alpha[8];
     alpha[0] = (uint8_t)(ctrl);
     ctrl >>= 8;
@@ -352,7 +374,7 @@ bool ConverterDxt::decodeBlockDxt5(uint8_t *src, uint8_t *dst) noexcept
     }
 
     if (!unpackColors565(&src[8], block)) return false;
-    int code = get32u((uint32_t*)(&src[12]));
+    int code = get32u_le((uint32_t*)(&src[12]));
     for (unsigned idx = 0; idx < 16; idx++, code >>= 2, ctrl >>= 3, dst += 4) {
       // pre-setting alpha
       dst[3] = alpha[(size_t)(ctrl & 7UL)];
@@ -391,8 +413,8 @@ bool ConverterDxt::decodeBlockDxt5(uint8_t *src, uint8_t *dst) noexcept
 bool ConverterDxt::unpackColors565(const uint8_t *src, uint8_t *dst) noexcept
 {
   if (src != nullptr && dst != nullptr) {
-    uint16_t c1 = get16u((uint16_t*)(&src[0]));
-    uint16_t c2 = get16u((uint16_t*)(&src[2]));
+    uint16_t c1 = get16u_le((uint16_t*)(&src[0]));
+    uint16_t c2 = get16u_le((uint16_t*)(&src[2]));
 
     dst[0] = ((c1 << 3) & 0xf8) | ((c1 >> 2) & 0x07);
     dst[1] = ((c1 >> 3) & 0xfc) | ((c1 >> 9) & 0x03);

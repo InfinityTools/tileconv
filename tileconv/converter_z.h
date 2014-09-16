@@ -19,34 +19,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef _CONVERTER_RAW_H_
-#define _CONVERTER_RAW_H_
+#ifndef _CONVERTER_Z_H_
+#define _CONVERTER_Z_H_
 #include "converter.h"
 
 namespace tc {
 
-/** Implements a dummy encoder and decoder for type Encoding::RAW. */
-class ConverterRaw : public Converter
+/** Implements a TIZ/MOZ decoder. */
+class ConverterZ: public Converter
 {
 public:
-  ConverterRaw(const Options& options, unsigned type) noexcept;
-  ~ConverterRaw() noexcept;
+  ConverterZ(const Options& options, unsigned type) noexcept;
+  ~ConverterZ() noexcept;
 
-  bool canEncode() const noexcept { return true; }
+  bool canEncode() const noexcept { return false; }
   bool canDecode() const noexcept { return true; }
-  bool deflateAllowed() const noexcept { return true; }
+  bool deflateAllowed() const noexcept { return false; }
 
-  /** See Converter::getRequiredSpace() */
+  /** Returns the max. possible space required to hold encoded tile data. */
   int getRequiredSpace(int width, int height) const noexcept;
 
   /** See Converter::convert() */
   int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept;
 
 protected:
+  // Decoding methods for each tile type
+  int decodeTile0(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
+  int decodeTile1(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
+  int decodeTile2(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
+
   // See Converter::isTypeValid()
   bool isTypeValid() const noexcept;
+
 };
 
 }   // namespace tc
 
-#endif		// _CONVERTER_RAW_H_
+#endif		// _CONVERTER_Z_H_

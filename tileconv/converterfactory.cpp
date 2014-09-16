@@ -21,7 +21,7 @@ THE SOFTWARE.
 */
 #include "converter_raw.h"
 #include "converter_dxt.h"
-//#include "converter_tiz.h"
+#include "converter_z.h"
 //#include "converter_webp.h"
 #include "converterfactory.h"
 
@@ -31,21 +31,20 @@ ConverterPtr ConverterFactory::GetConverter(const Options& options, unsigned typ
 {
   type &= 0xff;
   switch (type) {
-    case 0:
+    case ENCODE_RAW:
       // No conversion: RAW encoder/decoder
       return ConverterPtr(new ConverterRaw(options, type));
-    case 1:
-    case 2:
-    case 3:
+    case ENCODE_DXT1:
+    case ENCODE_DXT3:
+    case ENCODE_DXT5:
       // DXTn encoder/decoder
       return ConverterPtr(new ConverterDxt(options, type));
-//    case 4:
-      // Pseudo type: TIZ decoder
-//      return ConverterPtr(new ConverterTiz(options, type));
-//    case 5:
-//    case 6:
+//    case ENCODE_WEBP:
       // WebP encoder/decoder
-//      return Converterptr(new ConverterWebP(options, type));
+//      return ConverterPtr(new ConverterWebP(options, type));
+    case ENCODE_Z:
+      // MOZ/TIZ decoder
+      return ConverterPtr(new ConverterZ(options, type));
     default:
       return nullptr;
   }
