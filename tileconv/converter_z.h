@@ -48,6 +48,9 @@ protected:
   int decodeTile1(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
   int decodeTile2(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept;
 
+  // Apply Tile1 alpha bitmask to indexed pixels
+  void applyAlpha(uint8_t *alpha, uint8_t *indexed, int size) noexcept;
+
   // See Converter::isTypeValid()
   bool isTypeValid() const noexcept;
 

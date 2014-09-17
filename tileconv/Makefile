@@ -7,7 +7,7 @@ include config.mk
 CXX           ?= g++
 CXXFLAGS      = -c -Wall -O2 -std=c++11 -msse -mfpmath=sse -I$(ZLIB_INCLUDE) -I$(PNGQUANT_INCLUDE) -I$(SQUISH_INCLUDE) -I$(JPEG_INCLUDE)
 LDFLAGS       = -L$(ZLIB_LIB) -L$(PNGQUANT_LIB) -L$(SQUISH_LIB) -L$(JPEG_LIB)
-LIBS          = -lz -limagequant -lsquish -lturbojpeg
+LIBS          = -lz -limagequant -lsquish -ljpeg
 EXECUTABLE    = tileconv
 
 ifeq ($(OS),Windows_NT)
