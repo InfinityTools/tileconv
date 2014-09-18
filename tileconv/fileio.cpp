@@ -50,25 +50,49 @@ long File::GetFileSize(const char *fileName) noexcept
 }
 
 
+bool File::RemoveFile(const char *fileName) noexcept
+{
+  if (fileName != nullptr) {
+    return (std::remove(fileName) == 0);
+  }
+  return false;
+}
+
+
+bool File::RenameFile(const char *oldFileName, const char *newFileName) noexcept
+{
+  if (oldFileName != nullptr && *oldFileName != 0 &&
+      newFileName != nullptr && *newFileName != 0) {
+    return (std::rename(oldFileName, newFileName) == 0);
+  }
+  return false;
+}
+
+
 File::File(const char *fileName, const char *mode) noexcept
 : m_file(0)
+, m_fileName()
 , m_mode()
 , m_buffer(0)
+, m_deleteOnClose(false)
 {
   m_file = std::fopen(fileName, mode);
   if (m_file != nullptr) {
+    m_fileName.assign(fileName);
     m_mode.assign(mode);
   }
 }
 
 File::File(const char *fileName, const char *mode, int bufferSize) noexcept
 : m_file(0)
+, m_fileName()
 , m_mode()
 , m_buffer(0)
 {
   m_file = std::fopen(fileName, mode);
   if (m_file != nullptr) {
-    if (mode) m_mode.assign(mode);
+    m_fileName.assign(fileName);
+    m_mode.assign(mode);
     if (bufferSize < 0) bufferSize = 0;
     if (bufferSize > 0) m_buffer = new char[bufferSize];
     std::setvbuf(m_file, m_buffer, (bufferSize > 0) ? _IOFBF : _IONBF, bufferSize);
@@ -86,6 +110,9 @@ File::~File() noexcept
     delete[] m_buffer;
     m_buffer = nullptr;
   }
+  if (isDeleteOnClose() && !m_fileName.empty()) {
+    std::remove(m_fileName.c_str());
+  }
 }
 
 bool File::reopen(const char *fileName, const char *mode) noexcept
@@ -93,9 +120,11 @@ bool File::reopen(const char *fileName, const char *mode) noexcept
   if (m_file) {
     m_file = std::freopen(fileName, mode, m_file);
     if (m_file) {
-      if (mode) m_mode.assign(mode);
+      m_fileName.assign(fileName);
+      m_mode.assign(mode);
       return true;
     } else {
+      m_fileName.clear();
       m_mode.clear();
     }
   }
@@ -245,6 +274,37 @@ long File::getsize() noexcept
     }
   }
   return -1L;
+}
+
+
+bool File::isReadEnabled() const noexcept
+{
+  for (auto iter = m_mode.cbegin(); iter != m_mode.cend(); ++iter) {
+    switch (*iter) {
+      case 'r':
+      case '+':
+        return true;
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+
+bool File::isWriteEnabled() const noexcept
+{
+  for (auto iter = m_mode.cbegin(); iter != m_mode.cend(); ++iter) {
+    switch (*iter) {
+      case 'w':
+      case 'a':
+      case '+':
+        return true;
+      default:
+        break;
+    }
+  }
+  return false;
 }
 
 }   // namespace tc

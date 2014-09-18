@@ -39,6 +39,12 @@ public:
   /** Returns size of the given file in bytes. Returns -1 on error. */
   static long GetFileSize(const char *fileName) noexcept;
 
+  /** Deletes the file identified by the given name. */
+  static bool RemoveFile(const char *fileName) noexcept;
+
+  /** Changes the name of a file. */
+  static bool RenameFile(const char *oldFileName, const char *newFileName) noexcept;
+
 public:
   /** Opens a file in the specified mode. */
   File(const char *fileName, const char *mode) noexcept;
@@ -116,10 +122,24 @@ public:
   /** Returns the size of the currently open file. Returns -1 on error. */
   long getsize() noexcept;
 
+  /**
+   * Specify whether to remove the file from disk after closing. Default: disabled.
+   * (Possible use case: enable on conversion error)
+   */
+  void setDeleteOnClose(bool b) noexcept { m_deleteOnClose = b; }
+  bool isDeleteOnClose() const noexcept { return m_deleteOnClose; }
+
+  /** Returns whether current file is readable. */
+  bool isReadEnabled() const noexcept;
+  /** Returns whether current file is writable. */
+  bool isWriteEnabled() const noexcept;
+
 private:
-  std::FILE     *m_file;    // current file handle
-  std::string   m_mode;     // current file mode
-  char          *m_buffer;  // internal buffer (if used)
+  std::FILE     *m_file;          // current file handle
+  std::string   m_fileName;       // filename
+  std::string   m_mode;           // current file mode
+  char          *m_buffer;        // internal buffer (if used)
+  bool          m_deleteOnClose;
 };
 
 }   // namespace tc

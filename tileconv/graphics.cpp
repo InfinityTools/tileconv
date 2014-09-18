@@ -142,6 +142,7 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
       }
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint32_t v32;
         uint32_t tileSizeIndexed = tileDim*tileDim;   // indexed size of the tile
@@ -244,6 +245,7 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
                       ratioCount / (double)tileCount);
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
@@ -286,6 +288,7 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
       }
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint32_t v32;
 
@@ -385,6 +388,7 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
           std::printf("TBC file converted successfully.\n");
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
@@ -525,6 +529,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
       }
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint32_t v32;
         uint32_t tileCount = mosCols * mosRows;
@@ -641,6 +646,7 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
                       ratioCount / (double)tileCount);
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
@@ -690,6 +696,7 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
       }
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint16_t v16;
         uint32_t v32;
@@ -841,6 +848,7 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
           std::printf("MBC file converted successfully.\n");
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
@@ -879,6 +887,7 @@ bool Graphics::tizToTIS(const std::string &inFile, const std::string &outFile) n
       if (fin.read(&v16, 2, 1) != 1) return false;
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint32_t v32;
 
@@ -988,6 +997,7 @@ bool Graphics::tizToTIS(const std::string &inFile, const std::string &outFile) n
           std::printf("TIZ file converted successfully.\n");
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
@@ -1030,6 +1040,7 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
       }
 
       File fout(outFile.c_str(), "wb");
+      fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint16_t v16;
         uint32_t v32;
@@ -1190,6 +1201,7 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
           std::printf("MOZ file converted successfully.\n");
         }
 
+        fout.setDeleteOnClose(false);
         return true;
       }
     } else {
