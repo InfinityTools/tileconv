@@ -19,6 +19,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#include <cstring>
 #include "jpeg.h"
 
 namespace tc {
@@ -29,11 +30,13 @@ Jpeg::Jpeg(const Options& options) noexcept
 , m_err()
 , m_width()
 , m_height()
+, m_error(false)
 {
   static_assert(JPEG_LIB_VERSION >= 80, "jpeg-turbo must be compiled with v8 API/ABI support.");
 
-  m_info.err = jpeg_std_error(&m_err.pub);
-  m_err.pub.error_exit = MyErrorExit;
+  m_info.client_data = this;
+  m_info.err = jpeg_std_error(&m_err);
+  m_err.error_exit = MyErrorExit;
   jpeg_create_decompress(&m_info);
 }
 
@@ -47,12 +50,9 @@ Jpeg::~Jpeg() noexcept
 int Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, JSAMPARRAY srcPal,
                      uint8_t *dstPal, uint8_t *dstBuf) noexcept
 {
+  setError(false);
   if (srcBuf != nullptr && srcBufSize > 0 && dstPal != nullptr && dstBuf != nullptr) {
-    if (setjmp(m_err.setjmp_buffer)) {
-      // handling jpeg errors
-      jpeg_abort_decompress(&m_info);
-      return 0;
-    }
+    JSAMPLE *jpgPal[3];
 
     // initializing decompression
     jpeg_mem_src(&m_info, srcBuf, srcBufSize);
@@ -69,7 +69,6 @@ int Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, JSAMPARRAY srcPal,
     }
     if (srcPal != nullptr) {
       // using predefined palette
-      JSAMPLE *jpgPal[3];
       jpgPal[0] = srcPal[0] + 1;
       jpgPal[1] = srcPal[1] + 1;
       jpgPal[2] = srcPal[2] + 1;
@@ -89,7 +88,7 @@ int Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, JSAMPARRAY srcPal,
     JSAMPARRAY buffer = (*m_info.mem->alloc_sarray)((j_common_ptr)&m_info, JPOOL_IMAGE, tileSize, 1);
     while (m_info.output_scanline < m_info.output_height) {
       jpeg_read_scanlines(&m_info, buffer, 1);
-      memcpy(dstBuf + len, buffer[0], m_info.output_width);
+      std::memcpy(dstBuf + len, buffer[0], m_info.output_width);
       len += m_info.output_width;
     }
 
@@ -130,7 +129,9 @@ int Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, JSAMPARRAY srcPal,
     // finished decompressing
     jpeg_finish_decompress(&m_info);
 
-    return 1024 + len;
+    if (!isError()) {
+      return 1024 + len;
+    }
   }
   return 0;
 }
@@ -138,13 +139,14 @@ int Jpeg::decompress(uint8_t *srcBuf, size_t srcBufSize, JSAMPARRAY srcPal,
 
 bool Jpeg::updateInformation(uint8_t *buf, size_t bufSize) noexcept
 {
+  setError(false);
   bool retVal = false;
   if (buf != nullptr && bufSize > 0) {
     jpeg_mem_src(&m_info, buf, bufSize);
     if (jpeg_read_header(&m_info, TRUE) != 0) {
       m_width = m_info.image_width;
       m_height = m_info.image_height;
-      retVal = true;
+      if (!isError()) retVal = true;
     }
     jpeg_abort_decompress(&m_info);
   }
@@ -154,9 +156,9 @@ bool Jpeg::updateInformation(uint8_t *buf, size_t bufSize) noexcept
 
 void Jpeg::MyErrorExit(j_common_ptr cinfo)
 {
-  MyErrorMsgPtr myErr = (MyErrorMsgPtr)cinfo->err;
+  Jpeg *instance = (Jpeg*)cinfo->client_data;
+  instance->setError(true);
   (*cinfo->err->output_message)(cinfo);
-  longjmp(myErr->setjmp_buffer, 1);
 }
 
 
