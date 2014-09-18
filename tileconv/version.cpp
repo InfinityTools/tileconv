@@ -20,6 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 int vers_major = 0;
-int vers_minor = 4;
+int vers_minor = 5;
 char prog_name[] = "tileconv";
 char author[] = "Argent77";
