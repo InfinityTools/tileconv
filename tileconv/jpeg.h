@@ -23,7 +23,6 @@ THE SOFTWARE.
 #define _JPEG_H_
 #include <stdio.h>
 #include <jpeglib.h>
-#include <setjmp.h>
 #include "options.h"
 
 namespace tc {
@@ -67,18 +66,16 @@ private:
   // Custom error handling mechanism
   static void MyErrorExit(j_common_ptr cinfo);
 
-private:
-  struct MyErrorMgr {
-    struct jpeg_error_mgr pub;  // "public" fields
-    jmp_buf setjmp_buffer;      // for return to caller
-  };
-  typedef struct MyErrorMgr* MyErrorMsgPtr;
+  bool isError() const noexcept { return m_error; }
+  void setError(bool b) noexcept { m_error = b; }
 
+private:
   const Options&                m_options;
   struct jpeg_decompress_struct m_info;
-  struct MyErrorMgr             m_err;
+  struct jpeg_error_mgr         m_err;
   int                           m_width;
   int                           m_height;
+  bool                          m_error;
 };
 
 }   // namespace tc

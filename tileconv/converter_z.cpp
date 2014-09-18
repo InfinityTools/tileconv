@@ -76,7 +76,7 @@ int ConverterZ::convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, in
 
 int ConverterZ::decodeTile0(uint8_t *palette, uint8_t *indexed, uint8_t *encoded) noexcept
 {
-  static const int TILE_SIZE = 5120;
+  static const unsigned TILE_SIZE = 5120;
   if (palette != nullptr && indexed != nullptr && encoded != nullptr) {
     int size = get16u_be((uint16_t*)encoded); encoded += 2;
     if (size > 0) {

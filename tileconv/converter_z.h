@@ -53,7 +53,6 @@ protected:
 
   // See Converter::isTypeValid()
   bool isTypeValid() const noexcept;
-
 };
 
 }   // namespace tc

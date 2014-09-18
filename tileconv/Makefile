@@ -24,7 +24,7 @@ else
   LIBS        += -pthread
   ifeq ($(shell uname -s),Darwin)
     # A few hacks to enable proper threading support
-    CXXFLAGS    += -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD
+    CXXFLAGS    += -D_GLIBCXX_USE_NANOSLEEP
   else
     # Nothing to do for Linux (yet)
   endif
