@@ -88,6 +88,7 @@ File::File(const char *fileName, const char *mode, int bufferSize) noexcept
 , m_fileName()
 , m_mode()
 , m_buffer(0)
+, m_deleteOnClose(false)
 {
   m_file = std::fopen(fileName, mode);
   if (m_file != nullptr) {
