@@ -19,29 +19,43 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include <algorithm>
-#include "tilethreadpool_base.h"
+#ifndef _TILECONV_H_
+#define _TILECONV_H_
+#include "types.h"
+#include "options.h"
 
 namespace tc {
 
-const unsigned TileThreadPool::MAX_THREADS  = 256u;
-const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
-
-
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
-, m_maxTiles(MAX_TILES)
-, m_tiles()
-, m_results()
+/** High level class for converting TIS<->TBC and MOS<->MBC. */
+class TileConv
 {
-  setMaxTiles(tileNum);
-}
+public:
+  // Construct an uninitialized converter object.
+  TileConv() noexcept;
+  // Construct a converter object and initialize it with the specified arguments.
+  TileConv(int argc, char *argv[]) noexcept;
+  ~TileConv() noexcept;
 
+  // Initialize the converter object with the specified arguments
+  bool init(int argc, char *argv[]) noexcept;
 
-void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
-{
-  m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
-}
+  // Initiate conversion process
+  bool execute() noexcept;
+
+  const Options& getOptions() const noexcept { return m_options; }
+
+private:
+  // Display information about the specified filename
+  bool showInfo(const std::string &fileName) noexcept;
+
+  // Returns whether arguments have been initialized successfully.
+  bool isInitialized() const noexcept { return m_initialized; }
+
+private:
+  Options   m_options;
+  bool      m_initialized;
+};
 
 }   // namespace tc
+
+#endif		// _TILECONV_H_

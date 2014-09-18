@@ -19,44 +19,27 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef CONVERT_H
-#define CONVERT_H
+#ifndef _CONVERTERFACTORY_H_
+#define _CONVERTERFACTORY_H_
+#include "converter.h"
 
-#include <string>
-#include <vector>
-#include "types.h"
-#include "options.h"
+namespace tc {
 
-
-/** High level class for converting TIS<->TBC and MOS<->MBC. */
-class Convert
+/** Creates encoder or decoder instances for the specified type. */
+class ConverterFactory
 {
 public:
-  // Construct an uninitialized converter object.
-  Convert() noexcept;
-  // Construct a converter object and initialize it with the specified arguments.
-  Convert(int argc, char *argv[]) noexcept;
-  ~Convert() noexcept;
-
-  // Initialize the converter object with the specified arguments
-  bool init(int argc, char *argv[]) noexcept;
-
-  // Initiate conversion process
-  bool execute() noexcept;
-
-  const Options& getOptions() const noexcept { return m_options; }
+  /**
+   * Returns a matching converter instance as a smart pointer.
+   * \param type The encoding type as defined in FORMAT.
+   * \return A smart pointer containing a matching Converter instance, or nullptr on error.
+   */
+  static ConverterPtr GetConverter(const Options& options, unsigned type) noexcept;
 
 private:
-  // Display information about the specified filename
-  bool showInfo(const std::string &fileName) noexcept;
-
-  // Returns whether arguments have been initialized successfully.
-  bool isInitialized() const noexcept { return m_initialized; }
-
-private:
-  Options   m_options;
-  bool      m_initialized;
+  ConverterFactory() noexcept {}
 };
 
-#endif
+}   // namespace tc
 
+#endif		// _CONVERTERFACTORY_H_

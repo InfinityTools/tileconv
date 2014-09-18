@@ -1,11 +1,13 @@
 Description of the file formats TBC and MBC
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Note: Using little-endian byte order for data fields.
+
 Main Header (TBC):
 Offset    Size    Description
 0x0000    4       Signature ('TBC ')
 0x0004    4       Version (currently supported: 'V1.0')
-0x0008    4       Compression type (see below)
+0x0008    4       Encoding type (see below)
 0x000c    4       Tile count
 0x0010    var     Compressed Tile(s)
 
@@ -13,38 +15,32 @@ Main Header (MBC):
 Offset    Size    Description
 0x0000    4       Signature ('MBC ')
 0x0004    4       Version (currently supported: 'V1.0')
-0x0008    4       Compression type (see below)
+0x0008    4       Encoding type (see below)
 0x000c    4       Width
 0x0010    4       Height
 0x0014    var     Compressed Tile(s)
 
-Encoded Tile:
-Offset    Size    Description
-0x0000    2       Tile width (internally padded to a multiple of 4 
-                  for BCx pixel encodings)
-0x0002    2       Tile height (internally padded to a multiple of 4 
-                  for BCx pixel encodings)
-0x0004    var     either BCx encoded pixel data or palette & pixel data 
-                  (depending on compression type)
-
 Compressed Tile:
 Offset    Size    Description
-0x0000    4       Size of compressed data block
-0x0004    var     zlib compressed Encoded Tile (if compression type < 0x0100) 
-                  or unmodified Encoded Tile (if compression type >= 0x0100)
+0x0000    4       Size of data block
+0x0004    var     data block (content depends on encoding type)
+
+Encoded Tile:
+Offset    Size    Description
+0x0000    2       Tile width
+0x0002    2       Tile height
+0x0004    var     encoded pixel data
+Note: Only used for fixed-rate data encoding types.
 
 
-Supported compression types in format version V1.0:
-0x0000    no pixel encoding, zlib compressed tiles
-0x0001    BC1 (DXT1) pixel encoding, zlib compressed tiles
-0x0002    BC2 (DXT3) pixel encoding, zlib compressed tiles
-0x0003    BC3 (DXT5) pixel encoding, zlib compressed tiles
-0x0100    no pixel encoding, no zlib compression
-0x0101    BC1 (DXT1) pixel encoding, no zlib compression
-0x0102    BC2 (DXT3) pixel encoding, no zlib compression
-0x0103    BC3 (DXT5) pixel encoding, no zlib compression
+Encoding types supported by format version V1.0
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Note: Compression types 0x0000 and 0x0100 store palette and indexed pixel data 
-      as a contiguous block (1024+4096 bytes) for both formats TBC and MBC.
-
-Note: Little-endian order is used for data fields.
+Fixed-rate data encoding types:
+0x0000    no pixel encoding (unmodified palette and pixel data as contiguous block)
+0x0001    BC1 (DXT1) pixel encoding
+0x0002    BC2 (DXT3) pixel encoding
+0x0003    BC3 (DXT5) pixel encoding
+Encoding type bit 8:
+- clear: Adding zlib compressed Encoded Tile to Compressed Tile structure
+- set:   Adding uncompressed Encoded Tile to Compressed Tile structure

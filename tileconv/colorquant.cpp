@@ -23,6 +23,8 @@ THE SOFTWARE.
 #include <algorithm>
 #include "colorquant.h"
 
+namespace tc {
+
 ColorQuant::ColorQuant() noexcept
 : m_dithering(false)
 , m_lastTransparent(false)
@@ -135,15 +137,15 @@ bool ColorQuant::quantize() noexcept
   uint8_t *dstPal = (uint8_t*)m_palette;
   for (unsigned i = 0; i < numCols; i++, dstPal += 4) {
     liq_color px = pal->entries[i];
-    if (px.a < 255) {
-      dstPal[0] = dstPal[2] = dstPal[3] = 0;
+    if (px.a < m_minOpacity) {
+      dstPal[0] = dstPal[2] = 0;
       dstPal[1] = 255;
     } else {
       dstPal[0] = px.r;
       dstPal[1] = px.g;
       dstPal[2] = px.b;
-      dstPal[3] = 0;
     }
+    dstPal[3] = 0;
   }
 
   return true;
@@ -211,3 +213,5 @@ void ColorQuant::freeMemory() noexcept
     m_liqResult = nullptr;
   }
 }
+
+}   // namespace tc

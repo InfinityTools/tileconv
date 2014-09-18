@@ -19,29 +19,35 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include <algorithm>
-#include "tilethreadpool_base.h"
+#include "converter_raw.h"
+#include "converter_dxt.h"
+#include "converter_z.h"
+//#include "converter_webp.h"
+#include "converterfactory.h"
 
 namespace tc {
 
-const unsigned TileThreadPool::MAX_THREADS  = 256u;
-const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
-
-
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
-, m_maxTiles(MAX_TILES)
-, m_tiles()
-, m_results()
+ConverterPtr ConverterFactory::GetConverter(const Options& options, unsigned type) noexcept
 {
-  setMaxTiles(tileNum);
-}
-
-
-void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
-{
-  m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
+  type &= 0xff;
+  switch (type) {
+    case ENCODE_RAW:
+      // No conversion: RAW encoder/decoder
+      return ConverterPtr(new ConverterRaw(options, type));
+    case ENCODE_DXT1:
+    case ENCODE_DXT3:
+    case ENCODE_DXT5:
+      // DXTn encoder/decoder
+      return ConverterPtr(new ConverterDxt(options, type));
+//    case ENCODE_WEBP:
+      // WebP encoder/decoder
+//      return ConverterPtr(new ConverterWebP(options, type));
+    case ENCODE_Z:
+      // MOZ/TIZ decoder
+      return ConverterPtr(new ConverterZ(options, type));
+    default:
+      return nullptr;
+  }
 }
 
 }   // namespace tc

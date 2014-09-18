@@ -19,23 +19,187 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include "graphics.h"
+#include <algorithm>
+#include <cstring>
+#include "funcs.h"
+#include "converterfactory.h"
+#include "compress.h"
+#include "tiledata.h"
+
+namespace tc {
+
+const unsigned TileData::PALETTE_SIZE      = 1024;
+const unsigned TileData::MAX_TILE_SIZE_8   = 64*64;
+const unsigned TileData::MAX_TILE_SIZE_32  = 64*64*4;
 
 
-TileData::TileData(bool encode, int idx, BytePtr indexed, BytePtr palette, BytePtr deflated,
-                   int width, int height, unsigned type, unsigned deflatedSize) noexcept
-
-: isEncoding(encode)
-, ptrIndexed(indexed)
-, ptrPalette(palette)
-, ptrDeflated(deflated)
-, index(idx)
-, tileWidth(width)
-, tileHeight(height)
-, size(deflatedSize)
-, encodingType(type)
-, error(false)
-, errorMsg()
+TileData::TileData(const Options &options) noexcept
+: m_options(options)
+, m_encoding(false)
+, m_error(false)
+, m_ptrPalette(nullptr)
+, m_ptrIndexed(nullptr)
+, m_ptrDeflated(nullptr)
+, m_index(-1)
+, m_width(0)
+, m_height(0)
+, m_type(0)
+, m_size(0)
+, m_errorMsg()
 {
 }
+
+
+TileData::~TileData() noexcept
+{
+}
+
+
+TileData& TileData::operator()() noexcept
+{
+  if (isEncoding()) {
+    encode();
+  } else {
+    decode();
+  }
+  return *this;
+}
+
+
+void TileData::setIndex(int index) noexcept
+{
+  m_index = std::max(0, std::min(std::numeric_limits<int>::max(), index));
+}
+
+
+void TileData::setWidth(int width) noexcept
+{
+  m_width = std::max(0, std::min(std::numeric_limits<int>::max(), width));
+}
+
+
+void TileData::setHeight(int height) noexcept
+{
+  m_height = std::max(0, std::min(std::numeric_limits<int>::max(), height));
+}
+
+
+void TileData::setType(unsigned type) noexcept
+{
+  m_type = std::max(0u, std::min(std::numeric_limits<unsigned>::max(), type));
+}
+
+
+void TileData::setSize(int size) noexcept
+{
+  m_size = std::max(0, std::min(std::numeric_limits<int>::max(), size));
+}
+
+
+bool TileData::isValid() const noexcept
+{
+  if (isEncoding()) {
+    return (m_ptrPalette != nullptr && m_ptrIndexed != nullptr && m_ptrDeflated != nullptr &&
+            m_index >= 0 && m_width > 0 && m_height > 0);
+  } else {
+    return (m_ptrPalette != nullptr && m_ptrIndexed != nullptr && m_ptrDeflated != nullptr &&
+            m_index >= 0 && m_size > 0);
+  }
+}
+
+
+void TileData::encode() noexcept
+{
+  if (isValid()) {
+    ConverterPtr converter =
+        ConverterFactory::GetConverter(getOptions(),
+                                       Options::GetEncodingCode(getOptions().getEncoding(),
+                                                                getOptions().isDeflate()));
+
+    if (converter != nullptr) {
+      converter->setEncoding(true);
+      converter->setColorFormat(Converter::ColorFormat::ARGB);
+
+      unsigned tileSizeEncoded = converter->getRequiredSpace(getWidth(), getHeight()) + HEADER_TILE_ENCODED_SIZE;
+      if (tileSizeEncoded <= HEADER_TILE_ENCODED_SIZE) {
+        setError(true);
+        setErrorMsg("Error while calculating space\n");
+        return;
+      }
+      BytePtr  ptrEncoded(new uint8_t[tileSizeEncoded], std::default_delete<uint8_t[]>());
+      setSize(0);
+
+      if (!converter->convert(getPaletteData().get(), getIndexedData().get(), ptrEncoded.get(),
+                              getWidth(), getHeight())) {
+        setError(true);
+        setErrorMsg("Error while encoding tile data\n");
+        return;
+      }
+
+      if (getOptions().isDeflate()) {
+        // applying zlib compression
+        Compression compression;
+        setSize(compression.deflate(ptrEncoded.get(), tileSizeEncoded,
+                                    getDeflatedData().get(), tileSizeEncoded*2));
+        if (getSize() == 0) {
+          setError(true);
+          setErrorMsg("Error while compressing tile data\n");
+          return;
+        }
+      } else {
+        // using pixel encoding only
+        setSize(tileSizeEncoded);
+        std::memcpy(getDeflatedData().get(), ptrEncoded.get(), getSize());
+      }
+    } else {
+      setError(true);
+      setErrorMsg("Unsupported source format found\n");
+    }
+  } else {
+    setError(true);
+    setErrorMsg("Invalid tile data found\n");
+  }
+}
+
+
+void TileData::decode() noexcept
+{
+  if (isValid()) {
+    ConverterPtr converter = ConverterFactory::GetConverter(getOptions(), getType());
+
+    if (converter != nullptr) {
+      converter->setEncoding(false);
+      converter->setColorFormat(Converter::ColorFormat::ARGB);
+
+      BytePtr  ptrEncoded(new uint8_t[MAX_TILE_SIZE_32], std::default_delete<uint8_t[]>());
+
+      if (Options::IsTileDeflated(getType())) {
+        // inflating zlib compressed data
+        Compression compression;
+        compression.inflate(getDeflatedData().get(), getSize(), ptrEncoded.get(), MAX_TILE_SIZE_32);
+      } else {
+        // copy pixel encoded tile data
+        std::memcpy(ptrEncoded.get(), getDeflatedData().get(), getSize());
+      }
+
+      setSize(converter->convert(getPaletteData().get(), getIndexedData().get(),
+                                 ptrEncoded.get()));
+      if (getSize() == 0) {
+        setError(true);
+        setErrorMsg("Error while decoding tile data\n");
+        return;
+      }
+      setWidth(converter->getWidth());
+      setHeight(converter->getHeight());
+    } else {
+      setError(true);
+      setErrorMsg("Unsupported source format found\n");
+    }
+  } else {
+    setError(true);
+    setErrorMsg("Invalid tile data found\n");
+  }
+}
+
+}   // namespace tc
 

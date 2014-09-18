@@ -23,6 +23,7 @@ THE SOFTWARE.
 #include "graphics.h"
 #include "tilethreadpool_win32.h"
 
+namespace tc {
 
 unsigned getThreadPoolAutoThreads()
 {
@@ -143,7 +144,7 @@ DWORD WINAPI TileThreadPoolWin32::threadMain(LPVOID lpParam)
         instance->getTileQueue().pop();
         ::ReleaseMutex(instance->m_tilesMutex);
 
-        tileData = instance->getGraphics().processTile(tileData);
+        (*tileData)();
 
         // storing results
         ::WaitForSingleObject(instance->m_resultsMutex, INFINITE);
@@ -176,5 +177,6 @@ void TileThreadPoolWin32::threadDeactivated() noexcept
   ::ReleaseMutex(m_activeMutex);
 }
 
+}   // namespace tc
 
 #endif    // USE_WINTHREADS

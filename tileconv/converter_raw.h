@@ -19,29 +19,34 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#include <algorithm>
-#include "tilethreadpool_base.h"
+#ifndef _CONVERTER_RAW_H_
+#define _CONVERTER_RAW_H_
+#include "converter.h"
 
 namespace tc {
 
-const unsigned TileThreadPool::MAX_THREADS  = 256u;
-const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
-
-
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
-, m_maxTiles(MAX_TILES)
-, m_tiles()
-, m_results()
+/** Implements a dummy encoder and decoder for type Encoding::RAW. */
+class ConverterRaw : public Converter
 {
-  setMaxTiles(tileNum);
-}
+public:
+  ConverterRaw(const Options& options, unsigned type) noexcept;
+  ~ConverterRaw() noexcept;
 
+  bool canEncode() const noexcept { return true; }
+  bool canDecode() const noexcept { return true; }
+  bool deflateAllowed() const noexcept { return true; }
 
-void TileThreadPool::setMaxTiles(unsigned maxTiles) noexcept
-{
-  m_maxTiles = std::max(1u, std::min(MAX_TILES, maxTiles));
-}
+  /** See Converter::getRequiredSpace() */
+  int getRequiredSpace(int width, int height) const noexcept;
+
+  /** See Converter::convert() */
+  int convert(uint8_t *palette, uint8_t *indexed, uint8_t *encoded, int width, int height) noexcept;
+
+protected:
+  // See Converter::isTypeValid()
+  bool isTypeValid() const noexcept;
+};
 
 }   // namespace tc
+
+#endif		// _CONVERTER_RAW_H_

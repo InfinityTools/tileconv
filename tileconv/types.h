@@ -25,13 +25,50 @@ THE SOFTWARE.
 #include <cstdint>
 #include <memory>
 
-// Supported input file types
-enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC };
+namespace tc {
 
-// Supported pixel compression types
-enum class Encoding { UNKNOWN, RAW, BC1, BC2, BC3 };
+// Supported pixel encoding types
+#define ENCODE_RAW  0
+#define ENCODE_DXT1 1
+#define ENCODE_DXT3 2
+#define ENCODE_DXT5 3
+//#define ENCODE_WEBP 4
+#define ENCODE_Z    255
+
+/**
+ * Supported input file types:
+ * UNKNOWN: Returned in case of error
+ * TIS:     Paletted TIS resource type
+ * MOS:     Paletted MOS resource type
+ * TBC:     Block compressed TIS resource type
+ * MBC:     Block compressed MOS resource type
+ * TIZ:     Legacy block compressed TIS resource type
+ * MOZ:     Legacy block compressed MOS resource type
+ */
+enum class FileType { UNKNOWN, TIS, MOS, TBC, MBC, TIZ, MOZ };
+
+/**
+ * Supported pixel compression types:
+ * UNKNOWN: Returned in case of error
+ * RAW:     Original palette+indexed pixel data
+ * BC1:     Using DXT1 compression
+ * BC2:     Using DXT3 compression
+ * BC3:     Using DXT5 compression
+ * Z:       Compression used by the TIZ/MOZ format
+ */
+enum class Encoding { UNKNOWN, RAW, BC1, BC2, BC3, Z };
 
 typedef std::shared_ptr<uint8_t> BytePtr;
 
+static const unsigned HEADER_TBC_SIZE             = 16;       // TBC header size
+static const unsigned HEADER_MBC_SIZE             = 20;       // MBC header size
+static const unsigned HEADER_TILE_ENCODED_SIZE    = 4;        // header size for a raw/BCx encoded tile
+static const unsigned HEADER_TILE_COMPRESSED_SIZE = 4;        // header size for a zlib compressed tile
+
+static const unsigned PALETTE_SIZE                = 1024;     // palette size in bytes
+static const unsigned MAX_TILE_SIZE_8             = 64*64;    // max. size (in bytes) of a 8-bit pixels tile
+static const unsigned MAX_TILE_SIZE_32            = 64*64*4;  // max. size (in bytes) of a 32-bit pixels tile
+
+}   // namespace tc
 
 #endif

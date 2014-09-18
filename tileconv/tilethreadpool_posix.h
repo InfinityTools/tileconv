@@ -28,6 +28,8 @@ THE SOFTWARE.
 #include <mutex>
 #include "tilethreadpool_base.h"
 
+namespace tc {
+
 /** Provides threading capabilities specialized for encoding or decoding tile data, using posix calls. */
 class TileThreadPoolPosix : public TileThreadPool
 {
@@ -65,6 +67,8 @@ private:
   std::mutex                m_resultsMutex;
   std::vector<std::thread>  m_threads;
 };
+
+}   // namespace tc
 
 #endif    // USE_WINTHREADS
 

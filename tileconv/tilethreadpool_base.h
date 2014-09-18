@@ -25,6 +25,8 @@ THE SOFTWARE.
 #include "tiledata.h"
 #include "graphics.h"
 
+namespace tc {
+
 class TileThreadPool;
 
 typedef std::shared_ptr<TileThreadPool> ThreadPoolPtr;
@@ -125,5 +127,6 @@ private:
   ResultQueue   m_results;
 };
 
+}   // namespace tc
 
 #endif		// _TILETHREADPOOL_BASE_H_

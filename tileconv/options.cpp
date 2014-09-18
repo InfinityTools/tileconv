@@ -25,7 +25,10 @@ THE SOFTWARE.
 #include "fileio.h"
 #include "tilethreadpool.h"
 #include "version.h"
+#include "converterfactory.h"
 #include "options.h"
+
+namespace tc {
 
 const int Options::MAX_THREADS          = 64;
 const int Options::DEFLATE              = 256;
@@ -92,7 +95,8 @@ bool Options::init(int argc, char *argv[]) noexcept
       case 't':
         if (optarg != nullptr) {
           int type = std::atoi(optarg);
-          if (GetEncodingType(type) != Encoding::UNKNOWN) {
+          ConverterPtr converter = ConverterFactory::GetConverter(*this, type);
+          if (converter != nullptr && converter->canEncode()) {
             setEncoding(GetEncodingType(type));
           } else {
             std::printf("Unsupported pixel encoding type: %d\n", type);
@@ -171,6 +175,16 @@ bool Options::init(int argc, char *argv[]) noexcept
     }
   }
 
+  // finalizing options
+  if (isDeflate()) {
+    // disabling deflating for certain encoding types
+    ConverterPtr converter =
+        ConverterFactory::GetConverter(*this, GetEncodingCode(getEncoding(), isDeflate()));
+    if (converter != nullptr) {
+      setDeflate(converter->deflateAllowed());
+    }
+  }
+
   // remaining arguments are assumed to be input filenames
   for (; optind < argc; optind++) {
     if (argv[optind][0] == '-') {
@@ -213,7 +227,7 @@ void Options::showHelp() noexcept
   std::printf("  -u          Do not apply tile compression.\n");
   std::printf("  -o output   Select output file or folder.\n");
   std::printf("              (Note: Output file works only with single input file!)\n");
-  std::printf("  -z          MOS only: Decompress MBC into compressed MOS (MOSC).\n");
+  std::printf("  -z          Decode MBC/MOZ into compressed MOS (MOSC).\n");
   std::printf("  -q Dec[Enc] Set quality levels for decoding and, optionally, encoding.\n");
   std::printf("              Supported levels: 0..9 (Defaults: 4 for decoding, 9 for encoding)\n");
   std::printf("              (0=fast and lower quality, 9=slow and higher quality)\n");
@@ -237,7 +251,7 @@ void Options::showHelp() noexcept
   std::printf("  -T          Treat unrecognized input files as headerless TIS.\n");
   std::printf("  -I          Show file information and exit.\n");
   std::printf("  -V          Print version number and exit.\n\n");
-  std::printf("Supported input file types: TIS, MOS, TBC, MBC\n");
+  std::printf("Supported input file types: TIS, MOS, TBC, MBC, TIZ, MOZ\n");
   std::printf("Note: You can mix and match input files of each supported type.\n\n");
 }
 
@@ -368,16 +382,20 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
       return FileType::UNKNOWN;
     }
 
-    FileType retval;
+    FileType retVal;
     if (std::strncmp(sig, "TIS ", 4) == 0) {
-      retval = FileType::TIS;
+      retVal = FileType::TIS;
     } else if (std::strncmp(sig, "MOS ", 4) == 0 ||
                std::strncmp(sig, "MOSC", 4) == 0) {
-      retval = FileType::MOS;
+      retVal = FileType::MOS;
     } else if (std::strncmp(sig, "TBC ", 4) == 0) {
-      retval = FileType::TBC;
+      retVal = FileType::TBC;
     } else if (std::strncmp(sig, "MBC ", 4) == 0) {
-      retval = FileType::MBC;
+      retVal = FileType::MBC;
+    } else if (std::strncmp(sig, "TIZ0", 4) == 0) {
+      retVal = FileType::TIZ;
+    } else if (std::strncmp(sig, "MOZ0", 4) == 0) {
+      retVal = FileType::MOZ;
     } else {
       if (assumeTis) {
         long size = f.getsize();
@@ -391,7 +409,7 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
       }
     }
 
-    return retval;
+    return retVal;
   }
   return FileType::UNKNOWN;
 }
@@ -418,6 +436,12 @@ std::string Options::SetFileExt(const std::string &fileName, FileType type) noex
     case FileType::MBC:
       retVal.append(".mbc");
       break;
+    case FileType::TIZ:
+      retVal.append(".tiz");
+      break;
+    case FileType::MOZ:
+      retVal.append(".moz");
+      break;
     default:
       break;
     }
@@ -429,11 +453,13 @@ std::string Options::SetFileExt(const std::string &fileName, FileType type) noex
 Encoding Options::GetEncodingType(int code) noexcept
 {
   switch (code & 0xff) {
-    case 0:  return Encoding::RAW;
-    case 1:  return Encoding::BC1;
-    case 2:  return Encoding::BC2;
-    case 3:  return Encoding::BC3;
-    default: return Encoding::UNKNOWN;
+    case ENCODE_RAW:  return Encoding::RAW;
+    case ENCODE_DXT1: return Encoding::BC1;
+    case ENCODE_DXT3: return Encoding::BC2;
+    case ENCODE_DXT5: return Encoding::BC3;
+//    case ENCODE_WEBP: return Encoding::WEBP;
+    case ENCODE_Z:    return Encoding::Z;
+    default:          return Encoding::UNKNOWN;
   }
 }
 
@@ -449,11 +475,27 @@ unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
 {
   unsigned retVal = deflate ? 0 : DEFLATE;
   switch (type) {
-    case Encoding::RAW: retVal |= 0; break;
-    case Encoding::BC1: retVal |= 1; break;
-    case Encoding::BC2: retVal |= 2; break;
-    case Encoding::BC3: retVal |= 3; break;
-    default:            retVal = -1; break;
+    case Encoding::RAW:
+      retVal |= ENCODE_RAW;
+      break;
+    case Encoding::BC1:
+      retVal |= ENCODE_DXT1;
+      break;
+    case Encoding::BC2:
+      retVal |= ENCODE_DXT3;
+      break;
+    case Encoding::BC3:
+      retVal |= ENCODE_DXT5;
+      break;
+//    case Encoding::WEBP:
+//      retVal |= ENCODE_WEBP;
+//      break;
+    case Encoding::Z:
+      retVal |= ENCODE_Z;
+      break;
+    default:
+      retVal = -1;
+      break;
   }
   return retVal;
 }
@@ -461,26 +503,31 @@ unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
 
 const std::string& Options::GetEncodingName(int code) noexcept
 {
-  static const std::string unkDesc("Unknown (unknown)");
-  static const std::string desc0("Not encoded (zlib-compressed)");
-  static const std::string desc1("BC1/DXT1 (zlib-compressed)");
-  static const std::string desc2("BC2/DXT3 (zlib-compressed)");
-  static const std::string desc3("BC3/DXT5 (zlib-compressed)");
-  static const std::string desc256("Not encoded (uncompressed)");
-  static const std::string desc257("BC1/DXT1 (uncompressed)");
-  static const std::string desc258("BC2/DXT3 (uncompressed)");
-  static const std::string desc259("BC3/DXT5 (uncompressed)");
+  static const std::string descUnk("Unknown (unknown)");
+  static const std::string descRawDef("Not encoded (zlib-compressed)");
+  static const std::string descDxt1Def("BC1/DXT1 (zlib-compressed)");
+  static const std::string descDxt3Def("BC2/DXT3 (zlib-compressed)");
+  static const std::string descDxt5Def("BC3/DXT5 (zlib-compressed)");
+//  static const std::string descWebPDef("WebP (zlib-compressed)");
+  static const std::string descZ("JPEG compressed TIZ/MOZ");
+  static const std::string descRaw("Not encoded (uncompressed)");
+  static const std::string descDxt1("BC1/DXT1 (uncompressed)");
+  static const std::string descDxt3("BC2/DXT3 (uncompressed)");
+  static const std::string descDxt5("BC3/DXT5 (uncompressed)");
+//  static const std::string descWebP("WebP (uncompressed)");
 
   switch (code) {
-    case 0:     return desc0;
-    case 1:     return desc1;
-    case 2:     return desc2;
-    case 3:     return desc3;
-    case 256+0: return desc256;
-    case 256+1: return desc257;
-    case 256+2: return desc258;
-    case 256+3: return desc259;
-    default:    return unkDesc;
+    case ENCODE_RAW: return descRawDef;
+    case ENCODE_DXT1: return descDxt1Def;
+    case ENCODE_DXT3: return descDxt3Def;
+    case ENCODE_DXT5: return descDxt5Def;
+    case ENCODE_Z: return descZ;
+    case ENCODE_RAW | 256: return descRaw;
+    case ENCODE_DXT1 | 256: return descDxt1;
+    case ENCODE_DXT3 | 256: return descDxt3;
+    case ENCODE_DXT5 | 256: return descDxt5;
+    case ENCODE_Z | 256: return descZ;
+    default: return descUnk;
   }
 }
 
@@ -545,3 +592,5 @@ std::string Options::getOptionsSummary(bool complete) const noexcept
 
   return sum;
 }
+
+}   // namespace tc
