@@ -66,8 +66,9 @@ static const unsigned HEADER_TILE_ENCODED_SIZE    = 4;        // header size for
 static const unsigned HEADER_TILE_COMPRESSED_SIZE = 4;        // header size for a zlib compressed tile
 
 static const unsigned PALETTE_SIZE                = 1024;     // palette size in bytes
-static const unsigned MAX_TILE_SIZE_8             = 64*64;    // max. size (in bytes) of a 8-bit pixels tile
-static const unsigned MAX_TILE_SIZE_32            = 64*64*4;  // max. size (in bytes) of a 32-bit pixels tile
+static const unsigned TILE_DIMENSION              = 64;       // max. tile dimension
+static const unsigned MAX_TILE_SIZE_8             = TILE_DIMENSION*TILE_DIMENSION;    // max. size (in bytes) of a 8-bit pixels tile
+static const unsigned MAX_TILE_SIZE_32            = TILE_DIMENSION*TILE_DIMENSION*4;  // max. size (in bytes) of a 32-bit pixels tile
 
 }   // namespace tc
 

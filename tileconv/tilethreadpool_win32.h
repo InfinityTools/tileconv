@@ -31,7 +31,7 @@ namespace tc {
 class TileThreadPoolWin32 : public TileThreadPool
 {
 public:
-  TileThreadPoolWin32(Graphics &gfx, unsigned threadNum, unsigned tileNum) noexcept;
+  TileThreadPoolWin32(unsigned threadNum, unsigned tileNum) noexcept;
   ~TileThreadPoolWin32() noexcept;
 
   /** See TileThreadPool::addTileData() */

@@ -48,7 +48,9 @@ const char Graphics::HEADER_VERSION_V1[4]     = {'V', '1', ' ', ' '};
 const char Graphics::HEADER_VERSION_V2[4]     = {'V', '2', ' ', ' '};
 const char Graphics::HEADER_VERSION_V1_0[4]   = {'V', '1', '.', '0'};
 
-const unsigned Graphics::MAX_PROGRESS                = 69;
+const unsigned Graphics::MAX_PROGRESS         = 69;
+const unsigned Graphics::MAX_POOL_TILES       = 64;
+
 
 Graphics::Graphics(const Options &options) noexcept
 : m_options(options)
@@ -66,86 +68,16 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], ver[4];
-      uint32_t tileCount, tileSize, headerSize, tileDim;
-      bool isHeaderless = false;
+      uint32_t tileCount;
 
       // parsing TIS header
-      if (fin.read(sig, 1, 4) != 4) return false;
-      if (std::strncmp(sig, HEADER_TIS_SIGNATURE, 4) != 0) {
-        if (getOptions().assumeTis()) {
-          fin.seek(0L, SEEK_SET);
-          isHeaderless = true;
-        } else {
-          std::printf("Invalid TIS signature\n");
-          return false;
-        }
-      }
-
-      if (!isHeaderless) {
-        if (fin.read(ver, 1, 4) != 4) return false;
-        if (std::strncmp(ver, HEADER_VERSION_V2, 4) == 0) {
-          if (!getOptions().isSilent()) {
-            std::printf("Warning: Incorrect TIS version 2 found. Converting anyway.\n");
-          }
-        } else if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
-          std::printf("Invalid TIS version\n");
-          return false;
-        }
-
-        if (fin.read(&tileCount, 4, 1) != 1) return false;
-        tileCount = get32u_le(&tileCount);
-        if (tileCount == 0) {
-          std::printf("No tiles found\n");
-          return false;
-        }
-
-        if (fin.read(&tileSize, 4, 1) != 1) return false;
-        tileSize = get32u_le(&tileSize);
-        if (tileSize != 0x1400) {
-          if (tileSize == 0x000c) {
-            std::printf("PVRZ-based TIS files are not supported\n");
-          } else {
-            std::printf("Invalid tile size\n");
-          }
-          return false;
-        }
-
-        if (fin.read(&headerSize, 4, 1) != 1) return false;
-        headerSize = get32u_le(&headerSize);
-        if (headerSize < 0x18) {
-          std::printf("Invalid header size\n");
-          return false;
-        }
-
-        if (fin.read(&tileDim, 4, 1) != 1) return false;
-        tileDim = get32u_le(&tileDim);
-        if (tileDim != 0x40) {
-          std::printf("Invalid tile dimensions\n");
-          return false;
-        }
-      } else {
-        long size = fin.getsize();
-        fin.seek(0L, SEEK_SET);
-        if (size < 0L) {
-          std::printf("Error reading input file\n");
-          return false;
-        } else if ((size % 5120) != 0) {
-          std::printf("Headerless TIS has wrong file size\n");
-          return false;
-        } else {
-          if (!getOptions().isSilent()) std::printf("Warning: Headerless TIS file detected\n");
-          tileSize = 0x1400;
-          tileDim = 0x40;
-          tileCount = (uint32_t)(size / tileSize);
-        }
-      }
+      if (!readTIS(fin, tileCount)) return false;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
       if (!fout.error()) {
         uint32_t v32;
-        uint32_t tileSizeIndexed = tileDim*tileDim;   // indexed size of the tile
+        uint32_t tileSizeIndexed = TILE_DIMENSION*TILE_DIMENSION;   // indexed size of the tile
 
         // writing TBC header
         if (fout.write(HEADER_TBC_SIGNATURE, 1, sizeof(HEADER_TBC_SIGNATURE)) != sizeof(HEADER_TBC_SIGNATURE)) return false;
@@ -159,13 +91,37 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // converting tiles
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0, curProgress = 0;
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
         double ratioCount = 0.0;    // counts the compression ratios of all tiles
-        for (unsigned tileIdx = 0; tileIdx < tileCount; tileIdx++) {
-          if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
+        unsigned tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          // creating new tile data object
+          if (tileIdx < tileCount) {
+            if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", tileIdx);
+            BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+            BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+            BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
+            TileDataPtr tileData(new TileData(getOptions()));
+            tileData->setEncoding(true);
+            tileData->setIndex(tileIdx);
+            tileData->setType(Options::GetEncodingCode(getOptions().getEncoding(), getOptions().isDeflate()));
+            tileData->setPaletteData(ptrPalette);
+            tileData->setIndexedData(ptrIndexed);
+            tileData->setDeflatedData(ptrDeflated);
+            tileData->setWidth(TILE_DIMENSION);
+            tileData->setHeight(TILE_DIMENSION);
+            // reading paletted tile
+            if (fin.read(tileData->getPaletteData().get(), 1, PALETTE_SIZE) != PALETTE_SIZE) {
+              return false;
+            }
+            if (fin.read(tileData->getIndexedData().get(), 1, tileSizeIndexed) != tileSizeIndexed) {
+              return false;
+            }
+            pool->addTileData(tileData);
+            tileIdx++;
+          }
 
-          // writing converted tiles to disk
+          // processing converted tiles
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
             TileDataPtr retVal = pool->getResult();
@@ -185,52 +141,9 @@ bool Graphics::tisToTBC(const std::string &inFile, const std::string &outFile) n
             ratioCount += ratio;
             nextTileIdx++;
           }
-
-          // creating new tile data object
-          BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-          BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-          BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
-          TileDataPtr tileData(new TileData(getOptions()));
-          tileData->setEncoding(true);
-          tileData->setIndex(tileIdx);
-          tileData->setType(Options::GetEncodingCode(getOptions().getEncoding(), getOptions().isDeflate()));
-          tileData->setPaletteData(ptrPalette);
-          tileData->setIndexedData(ptrIndexed);
-          tileData->setDeflatedData(ptrDeflated);
-          tileData->setWidth(tileDim);
-          tileData->setHeight(tileDim);
-          // reading paletted tile
-          if (fin.read(tileData->getPaletteData().get(), 1, PALETTE_SIZE) != PALETTE_SIZE) {
-            return false;
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
           }
-          if (fin.read(tileData->getIndexedData().get(), 1, tileSizeIndexed) != tileSizeIndexed) {
-            return false;
-          }
-          pool->addTileData(tileData);
-        }
-
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
-          while (pool->hasResult() && pool->peekResult() != nullptr &&
-              (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-            TileDataPtr retVal = pool->getResult();
-            if (retVal == nullptr || retVal->isError()) {
-              if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                std::printf("\n%s", retVal->getErrorMsg().c_str());
-              }
-              return false;
-            }
-            double ratio = 0.0;
-            if (!writeEncodedTile(retVal, fout, ratio)) {
-              return false;
-            }
-            if (getOptions().getVerbosity() == 1) {
-              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-            }
-            ratioCount += ratio;
-            nextTileIdx++;
-          }
-          pool->waitForResult();
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -261,31 +174,10 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], ver[4];
-      uint32_t compType, tileCount;
+      unsigned compType, tileCount;
 
       // parsing TBC header
-      if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_TBC_SIGNATURE, 4) != 0) {
-        std::printf("Invalid TBC signature\n");
-        return false;
-      }
-
-      if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) {
-        std::printf("Unsupported TBC version\n");
-        return false;
-      }
-
-      if (fin.read(&compType, 4, 1) != 1) return false;
-      compType = get32u_le(&compType);
-
-      if (fin.read(&tileCount, 4, 1) != 1) return false;
-      tileCount = get32u_le(&tileCount);
-      if (tileCount == 0) {
-        std::printf("No tiles found\n");
-        return false;
-      }
+      if (!readTBC(fin, compType, tileCount)) return false;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
@@ -310,9 +202,34 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
         }
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        uint32_t nextTileIdx = 0, curProgress = 0;
-        for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
+        unsigned tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          // creating new tile data object
+          if (tileIdx < tileCount) {
+            uint32_t chunkSize;
+            if (fin.read(&v32, 4, 1) != 1) return false;
+            chunkSize = get32u_le(&v32);
+            if (chunkSize == 0) {
+              std::printf("\nInvalid block size found for tile #%d\n", tileIdx);
+              return false;
+            }
+            BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+            BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+            BytePtr ptrDeflated(new uint8_t[chunkSize], std::default_delete<uint8_t[]>());
+            if (fin.read(ptrDeflated.get(), 1, chunkSize) != chunkSize) return false;
+            TileDataPtr tileData(new TileData(getOptions()));
+            tileData->setEncoding(false);
+            tileData->setIndex(tileIdx);
+            tileData->setType(compType);
+            tileData->setPaletteData(ptrPalette);
+            tileData->setIndexedData(ptrIndexed);
+            tileData->setDeflatedData(ptrDeflated);
+            tileData->setSize(chunkSize);
+            pool->addTileData(tileData);
+            tileIdx++;
+          }
+
           // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
@@ -331,50 +248,9 @@ bool Graphics::tbcToTIS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-
-          // creating new tile data object
-          uint32_t chunkSize;
-          if (fin.read(&v32, 4, 1) != 1) return false;
-          chunkSize = get32u_le(&v32);
-          if (chunkSize == 0) {
-            std::printf("\nInvalid block size found for tile #%d\n", tileIdx);
-            return false;
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
           }
-          BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-          BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-          BytePtr ptrDeflated(new uint8_t[chunkSize], std::default_delete<uint8_t[]>());
-          if (fin.read(ptrDeflated.get(), 1, chunkSize) != chunkSize) return false;
-          TileDataPtr tileData(new TileData(getOptions()));
-          tileData->setEncoding(false);
-          tileData->setIndex(tileIdx);
-          tileData->setType(compType);
-          tileData->setPaletteData(ptrPalette);
-          tileData->setIndexedData(ptrIndexed);
-          tileData->setDeflatedData(ptrDeflated);
-          tileData->setSize(chunkSize);
-          pool->addTileData(tileData);
-        }
-
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
-          while (pool->hasResult() && pool->peekResult() != nullptr &&
-                 (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-            TileDataPtr retVal = pool->getResult();
-            if (retVal == nullptr || retVal->isError()) {
-              if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                std::printf("\n%s", retVal->getErrorMsg().c_str());
-              }
-              return false;
-            }
-            if (!writeDecodedTisTile(retVal, fout)) {
-              return false;
-            }
-            if (getOptions().getVerbosity() == 1) {
-              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-            }
-            nextTileIdx++;
-          }
-          pool->waitForResult();
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -404,129 +280,13 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], ver[4];
-      uint32_t mosSize, tileDim, palOfs;
-      uint16_t mosWidth, mosHeight, mosCols, mosRows;
-      BytePtr mosData(nullptr, std::default_delete<uint8_t[]>());
+      unsigned mosWidth, mosHeight, mosCols, mosRows, palOfs;
+      BytePtr mosData(nullptr);
 
-      // loading MOS/MOSC input file
-      if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_MOSC_SIGNATURE, 4) == 0) {    // decompressing MOSC
-        uint32_t moscSize;
-        Compression compression;
-
-        // getting MOSC file size
-        moscSize = fin.getsize();
-        if (moscSize <= 12) {
-          std::printf("Invalid MOSC size\n");
-          return false;
-        }
-        moscSize -= 12;    // removing header size
-
-        fin.seek(4, SEEK_SET);
-        if (fin.read(&ver, 1, 4) != 4) return false;
-        if (std::strncmp(ver, HEADER_VERSION_V1, 4) != 0) {
-          std::printf("Invalid MOSC version\n");
-          return false;
-        }
-
-        if (fin.read(&mosSize, 4, 1) != 1) return false;
-        mosSize = get32u_le(&mosSize);
-        if (mosSize < 24) {
-          std::printf("MOS size too small\n");
-          return false;
-        }
-        BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
-        if (fin.read(moscData.get(), 1, moscSize) < moscSize) {
-          std::printf("Incomplete or corrupted MOSC file\n");
-          return false;
-        }
-
-        mosData.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
-        uint32_t size = compression.inflate(moscData.get(), moscSize, mosData.get(), mosSize);
-        if (size != mosSize) {
-          std::printf("Error while decompressing MOSC input file\n");
-          return false;
-        }
-      } else if (std::strncmp(sig, HEADER_MOS_SIGNATURE, 4) == 0) {   // loading MOS data
-        mosSize = fin.getsize();
-        if (mosSize < 24) {
-          std::printf("MOS size too small\n");
-          return false;
-        }
-        fin.seek(0, SEEK_SET);
-        mosData.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
-        if (fin.read(mosData.get(), 1, mosSize) != mosSize) return false;
-      } else {
-        std::printf("Invalid MOS signature\n");
-        return false;
-      }
-
-      // parsing MOS header
-      uint32_t inOfs = 0;
-      if (std::memcmp(mosData.get()+inOfs, HEADER_MOS_SIGNATURE, 4) != 0) {
-        std::printf("Invalid MOS signature\n");
-        return false;
-      }
-      inOfs += 4;
-
-      if (std::memcmp(mosData.get()+inOfs, HEADER_VERSION_V1, 4) != 0) {
-        std::printf("Unsupported MOS version\n");
-        return false;
-      }
-      inOfs += 4;
-
-      std::memcpy(&mosWidth, mosData.get()+inOfs, 2);
-      mosWidth = get16u_le(&mosWidth);
-      if (mosWidth == 0) {
-        std::printf("Invalid MOS width\n");
-        return false;
-      }
-      inOfs += 2;
-
-      mosHeight = get16u_le((uint16_t*)(mosData.get()+inOfs));
-      if (mosHeight == 0) {
-        std::printf("Invalid MOS height\n");
-        return false;
-      }
-      inOfs += 2;
-
-      mosCols = get16u_le((uint16_t*)(mosData.get()+inOfs));
-      if (mosCols == 0) {
-        std::printf("Invalid number of tiles\n");
-        return false;
-      }
-      inOfs += 2;
-
-      mosRows = get16u_le((uint16_t*)(mosData.get()+inOfs));
-      if (mosRows == 0) {
-        std::printf("Invalid number of tiles\n");
-        return false;
-      }
-      inOfs += 2;
-
-      tileDim = get32u_le((uint32_t*)(mosData.get()+inOfs));
-      if (tileDim != 0x40) {
-        std::printf("Invalid tile dimensions\n");
-        return false;
-      }
-      inOfs += 4;
-
-      palOfs = get32u_le((uint32_t*)(mosData.get()+inOfs));
-      if (palOfs < 24) {
-        std::printf("MOS header too small\n");
-        return false;
-      }
-      inOfs = palOfs;
-
-      {
-        // comparing calculated size with actual input file length
-        uint32_t size = palOfs + mosCols*mosRows*PALETTE_SIZE + mosCols*mosRows*4 + mosWidth*mosHeight;
-        if (mosSize < size) {
-          std::printf("Incomplete or corrupted MOS file\n");
-          return false;
-        }
-      }
+      // loading MOS/MOSC input data
+      if (!readMOS(fin, mosData, mosWidth, mosHeight, palOfs)) return false;
+      mosCols = (mosWidth+63) >> 6;
+      mosRows = (mosHeight+63) >> 6;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
@@ -546,52 +306,27 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing MOS width
         v32 = mosHeight; v32 = get32u_le(&v32);
         if (fout.write(&v32, 4, 1) != 1) return false;    // writing MOS height
+
         if (getOptions().isVerbose()) std::printf("Tile count: %d\n", tileCount);
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
         // processing tiles
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        unsigned nextTileIdx = 0, curProgress = 0;
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
         double ratioCount = 0.0;              // counts the compression ratios of all tiles
-        int curIndex = 0;
-        uint32_t remTileHeight = mosHeight;   // remaining tile height to cover
-        for (uint32_t row = 0; row < mosRows; row++, remTileHeight -= tileDim) {
-          uint32_t tileHeight = std::min(tileDim, remTileHeight);
-          uint32_t remTileWidth = mosWidth;   // remaining tile width to cover
-          for (uint32_t col = 0; col < mosCols; col++, curIndex++, remTileWidth -= tileDim) {
-            uint32_t tileWidth = std::min(tileDim, remTileWidth);
-            uint32_t tileSizeIndexed = tileWidth*tileHeight;
-
-            if (getOptions().isVerbose()) std::printf("Converting tile #%d\n", curIndex);
-
-            // writing converted tiles to disk
-            while (pool->hasResult() && pool->peekResult() != nullptr &&
-                   (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-              TileDataPtr retVal = pool->getResult();
-              if (retVal == nullptr || retVal->isError()) {
-                if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                  std::printf("\n%s", retVal->getErrorMsg().c_str());
-                }
-                return false;
-              }
-              double ratio = 0.0;
-              if (!writeEncodedTile(retVal, fout, ratio)) {
-                return false;
-              }
-              if (getOptions().getVerbosity() == 1) {
-                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-              }
-              ratioCount += ratio;
-              nextTileIdx++;
-            }
-
-            // creating new tile data object
+        unsigned tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          // creating new tile data object
+          if (tileIdx < tileCount) {
+            int row = tileIdx / mosCols;
+            int col = tileIdx % mosCols;
+            int tileWidth = std::min(TILE_DIMENSION, mosWidth - col*TILE_DIMENSION);
+            int tileHeight = std::min(TILE_DIMENSION, mosHeight - row*TILE_DIMENSION);
             BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
             BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
             BytePtr ptrDeflated(new uint8_t[MAX_TILE_SIZE_32*2], std::default_delete<uint8_t[]>());
             TileDataPtr tileData(new TileData(getOptions()));
             tileData->setEncoding(true);
-            tileData->setIndex(curIndex);
+            tileData->setIndex(tileIdx);
             tileData->setType(Options::GetEncodingCode(getOptions().getEncoding(), getOptions().isDeflate()));
             tileData->setPaletteData(ptrPalette);
             tileData->setIndexedData(ptrIndexed);
@@ -602,16 +337,14 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             std::memcpy(tileData->getPaletteData().get(), mosData.get()+palOfs, PALETTE_SIZE);
             palOfs += PALETTE_SIZE;
             // reading tile data
-            std::memcpy(&v32, mosData.get()+tileOfs, 4);
-            v32 = get32u_le(&v32);
+            v32 = get32u_le((uint32_t*)(mosData.get()+tileOfs));
             tileOfs += 4;
-            std::memcpy(tileData->getIndexedData().get(), mosData.get()+dataOfs+v32, tileSizeIndexed);
+            std::memcpy(tileData->getIndexedData().get(), mosData.get()+dataOfs+v32, tileWidth*tileHeight);
             pool->addTileData(tileData);
+            tileIdx++;
           }
-        }
 
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
+          // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
             TileDataPtr retVal = pool->getResult();
@@ -631,7 +364,9 @@ bool Graphics::mosToMBC(const std::string &inFile, const std::string &outFile) n
             ratioCount += ratio;
             nextTileIdx++;
           }
-          pool->waitForResult();
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
+          }
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -662,38 +397,10 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], ver[4];
-      uint32_t compType, mosWidth, mosHeight;
+      unsigned compType, mosWidth, mosHeight;
 
       // parsing TBC header
-      if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_MBC_SIGNATURE, 4) != 0) {
-        std::printf("Invalid MBC signature\n");
-        return false;
-      }
-
-      if (fin.read(ver, 1, 4) != 4) return false;
-      if (std::strncmp(ver, HEADER_VERSION_V1_0, 4) != 0) {
-        std::printf("Invalid MBC version\n");
-        return false;
-      }
-
-      if (fin.read(&compType, 4, 1) != 1) return false;
-      compType = get32u_le(&compType);
-
-      if (fin.read(&mosWidth, 4, 1) != 1) return false;
-      mosWidth = get32u_le(&mosWidth);
-      if (mosWidth == 0) {
-        std::printf("Invalid MBC width\n");
-        return false;
-      }
-
-      if (fin.read(&mosHeight, 4, 1) != 1) return false;
-      mosHeight = get32u_le(&mosHeight);
-      if (mosHeight == 0) {
-        std::printf("Invalid MBC height\n");
-        return false;
-      }
+      if (!readMBC(fin, compType, mosWidth, mosHeight)) return false;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
@@ -702,8 +409,8 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
         uint32_t v32;
 
         // creating a memory mapped copy of the output file
-        uint32_t mosCols = (mosWidth + 63) / 64;
-        uint32_t mosRows = (mosHeight + 63) / 64;
+        uint32_t mosCols = (mosWidth + 63) >> 6;
+        uint32_t mosRows = (mosHeight + 63) >> 6;
         uint32_t palOfs = 0x18;                                             // offset to palette data
         uint32_t tileOfs = palOfs + mosCols*mosRows*PALETTE_SIZE;           // offset to tile offset array
         uint32_t dataOfsBase = tileOfs + mosCols*mosRows*4, dataOfsRel = 0;     // abs. and rel. offsets to data blocks
@@ -711,29 +418,20 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
         BytePtr mosData(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
 
         // writing MOS header
-        uint32_t headerOfs = 0;
-        std::memcpy(mosData.get()+headerOfs, HEADER_MOS_SIGNATURE, 4);
-        headerOfs += 4;
-        std::memcpy(mosData.get()+headerOfs, HEADER_VERSION_V1, 4);
-        headerOfs += 4;
-        v16 = mosWidth; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos width
-        headerOfs += 2;
-        v16 = mosHeight; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos height
-        headerOfs += 2;
-        v16 = mosCols; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos columns
-        headerOfs += 2;
-        v16 = mosRows; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos rows
-        headerOfs += 2;
-        v32 = 0x40; v32 = get32u_le(&v32);
-        std::memcpy(mosData.get()+headerOfs, &v32, 4);     // writing tile dimension
-        headerOfs += 4;
-        v32 = 0x18; v32 = get32u_le(&v32);
-        std::memcpy(mosData.get()+headerOfs, &v32, 4);     // writing offset to palettes
-        headerOfs += 4;
+        std::memcpy(mosData.get(), HEADER_MOS_SIGNATURE, 4);
+        std::memcpy(mosData.get()+4, HEADER_VERSION_V1, 4);
+        v16 = mosWidth;
+        *(uint16_t*)(mosData.get()+8) = get16u_le(&v16);    // writing mos width
+        v16 = mosHeight;
+        *(uint16_t*)(mosData.get()+10) = get16u_le(&v16);   // writing mos height
+        v16 = mosCols;
+        *(uint16_t*)(mosData.get()+12) = get16u_le(&v16);   // writing mos columns
+        v16 = mosRows;
+        *(uint16_t*)(mosData.get()+14) = get16u_le(&v16);   // writing mos rows
+        v32 = 0x40;
+        *(uint32_t*)(mosData.get()+16) = get32u_le(&v32);   // writing tile dimension
+        v32 = 0x18;
+        *(uint32_t*)(mosData.get()+20) = get32u_le(&v32);   // writing offset to palettes
 
         if (getOptions().isVerbose()) {
           std::printf("Width: %d, height: %d, columns: %d, rows: %d, encoding: %d - %s\n",
@@ -741,39 +439,18 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
         }
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
+        // processing tiles
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
         uint32_t tileCount = mosCols * mosRows;
-        uint32_t nextTileIdx = 0, curProgress = 0;
-        int curIndex = 0;                       // the current tile index
-        for (uint32_t row = 0; row < mosRows; row++) {
-          for (uint32_t col = 0; col < mosCols; col++, curIndex++) {
-            if (getOptions().isVerbose()) std::printf("Decoding tile #%d\n", curIndex);
-
-            // writing converted tiles to disk
-            while (pool->hasResult() && pool->peekResult() != nullptr &&
-                   (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-              TileDataPtr retVal = pool->getResult();
-              if (retVal == nullptr || retVal->isError()) {
-                if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                  std::printf("\n%s", retVal->getErrorMsg().c_str());
-                }
-                return false;
-              }
-              if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
-                return false;
-              }
-              if (getOptions().getVerbosity() == 1) {
-                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-              }
-              nextTileIdx++;
-            }
-
-            // creating new tile data object
-            uint32_t chunkSize;
+        uint32_t tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          // creating new tile data object
+          if (tileIdx < tileCount) {
+            unsigned chunkSize;
             if (fin.read(&v32, 4, 1) != 1) return false;
             chunkSize = get32u_le(&v32);
             if (chunkSize == 0) {
-              std::printf("\nInvalid block size found for tile #%d\n", curIndex);
+              std::printf("\nInvalid block size found for tile #%d\n", tileIdx);
               return false;
             }
             BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
@@ -782,18 +459,17 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             if (fin.read(ptrDeflated.get(), 1, chunkSize) != chunkSize) return false;
             TileDataPtr tileData(new TileData(getOptions()));
             tileData->setEncoding(false);
-            tileData->setIndex(curIndex);
+            tileData->setIndex(tileIdx);
             tileData->setType(compType);
             tileData->setPaletteData(ptrPalette);
             tileData->setIndexedData(ptrIndexed);
             tileData->setDeflatedData(ptrDeflated);
             tileData->setSize(chunkSize);
             pool->addTileData(tileData);
+            tileIdx++;
           }
-        }
 
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
+          // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
             TileDataPtr retVal = pool->getResult();
@@ -811,7 +487,9 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-          pool->waitForResult();
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
+          }
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -820,28 +498,8 @@ bool Graphics::mbcToMOS(const std::string &inFile, const std::string &outFile) n
           return false;
         }
 
-        if (getOptions().isMosc()) {
-          // compressing mos -> mosc
-          uint32_t moscSize = mosSize*2;
-          Compression compression;
-          BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
-
-          // writing MOSC header
-          std::memcpy(moscData.get(), HEADER_MOSC_SIGNATURE, 4);
-          std::memcpy(moscData.get()+4, HEADER_VERSION_V1, 4);
-          v32 = get32u_le(&mosSize);
-          std::memcpy(moscData.get()+8, &v32, 4);
-
-          // compressing data
-          uint32_t size = compression.deflate(mosData.get(), mosSize, moscData.get()+12, moscSize-12);
-          moscSize = size + 12;
-
-          // writing cmos data to file
-          if (fout.write(moscData.get(), 1, moscSize) != moscSize) return false;
-        } else {
-          // writing mos data to file
-          if (fout.write(mosData.get(), 1, mosSize) != mosSize) return false;
-        }
+        // writing MOS/MOSC to disk
+        if (!writeMos(fout, mosData, mosSize)) return false;
 
         // displaying summary
         if (!getOptions().isSilent()) {
@@ -864,27 +522,11 @@ bool Graphics::tizToTIS(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], tsig[4];
-      uint32_t compType = Options::GetEncodingCode(Encoding::Z, false);
-      uint32_t tileCount;
-      uint16_t v16;
+      char tsig[4];
+      unsigned compType, tileCount;
 
       // parsing TIZ header
-      if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_TIZ_SIGNATURE, 4) != 0) {
-        std::printf("Invalid TIZ signature\n");
-        return false;
-      }
-
-      if (fin.read(&v16, 2, 1) != 1) return false;
-      tileCount = get16u_be(&v16);
-      if (tileCount == 0) {
-        std::printf("No tiles found\n");
-        return false;
-      }
-
-      // skipping 2 bytes
-      if (fin.read(&v16, 2, 1) != 1) return false;
+      if (!readTIZ(fin, compType, tileCount)) return false;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
@@ -909,9 +551,45 @@ bool Graphics::tizToTIS(const std::string &inFile, const std::string &outFile) n
         }
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
-        uint32_t nextTileIdx = 0, curProgress = 0;
-        for (uint32_t tileIdx = 0; tileIdx < tileCount; tileIdx++) {
+        // processing tiles
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
+        unsigned tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          if (tileIdx < tileCount) {
+            // creating new tile data object
+            uint32_t chunkSize;
+            BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
+            BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
+            BytePtr ptrDeflated;
+
+            if (fin.read(tsig, 1, 4) != 4) return false;
+            if (std::strncmp(tsig, HEADER_TIL0_SIGNATURE, 4) == 0 ||
+                std::strncmp(tsig, HEADER_TIL1_SIGNATURE, 4) == 0 ||
+                std::strncmp(tsig, HEADER_TIL2_SIGNATURE, 4) == 0) {
+              uint16_t tileSize;
+              if (fin.read(&tileSize, 2, 1) != 1) return false;
+              chunkSize = get16u_be(&tileSize);
+              ptrDeflated.reset(new uint8_t[chunkSize+6], std::default_delete<uint8_t[]>());
+              std::memcpy(ptrDeflated.get(), tsig, 4);
+              std::memcpy(ptrDeflated.get()+4, &tileSize, 2);
+              if (fin.read(ptrDeflated.get()+6, 1, chunkSize) != chunkSize) return false;
+              chunkSize += 6;
+            } else {
+              std::printf("\nInvalid header found in tile #%d\n", tileIdx);
+              return false;
+            }
+            TileDataPtr tileData(new TileData(getOptions()));
+            tileData->setEncoding(false);
+            tileData->setIndex(tileIdx);
+            tileData->setType(compType);
+            tileData->setPaletteData(ptrPalette);
+            tileData->setIndexedData(ptrIndexed);
+            tileData->setDeflatedData(ptrDeflated);
+            tileData->setSize(chunkSize);
+            pool->addTileData(tileData);
+            tileIdx++;
+          }
+
           // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
@@ -930,60 +608,9 @@ bool Graphics::tizToTIS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-
-          // creating new tile data object
-          uint32_t chunkSize;
-          BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
-          BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
-          BytePtr ptrDeflated;
-
-          if (fin.read(tsig, 1, 4) != 4) return false;
-          if (std::strncmp(tsig, HEADER_TIL0_SIGNATURE, 4) == 0 ||
-              std::strncmp(tsig, HEADER_TIL1_SIGNATURE, 4) == 0 ||
-              std::strncmp(tsig, HEADER_TIL2_SIGNATURE, 4) == 0) {
-            uint16_t tileSize;
-            if (fin.read(&tileSize, 2, 1) != 1) return false;
-            chunkSize = get16u_be(&tileSize);
-            ptrDeflated.reset(new uint8_t[chunkSize+6], std::default_delete<uint8_t[]>());
-            std::memcpy(ptrDeflated.get(), tsig, 4);
-            std::memcpy(ptrDeflated.get()+4, &tileSize, 2);
-            if (fin.read(ptrDeflated.get()+6, 1, chunkSize) != chunkSize) return false;
-            chunkSize += 6;
-          } else {
-            std::printf("\nInvalid header found in tile #%d\n", tileIdx);
-            return false;
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
           }
-          TileDataPtr tileData(new TileData(getOptions()));
-          tileData->setEncoding(false);
-          tileData->setIndex(tileIdx);
-          tileData->setType(compType);
-          tileData->setPaletteData(ptrPalette);
-          tileData->setIndexedData(ptrIndexed);
-          tileData->setDeflatedData(ptrDeflated);
-          tileData->setSize(chunkSize);
-          pool->addTileData(tileData);
-        }
-
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
-          while (pool->hasResult() && pool->peekResult() != nullptr &&
-                 (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-            TileDataPtr retVal = pool->getResult();
-            if (retVal == nullptr || retVal->isError()) {
-              if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                std::printf("\n%s", retVal->getErrorMsg().c_str());
-              }
-              return false;
-            }
-            if (!writeDecodedTisTile(retVal, fout)) {
-              return false;
-            }
-            if (getOptions().getVerbosity() == 1) {
-              curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-            }
-            nextTileIdx++;
-          }
-          pool->waitForResult();
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -1013,31 +640,11 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
   if (!inFile.empty() && !outFile.empty() && inFile != outFile) {
     File fin(inFile.c_str(), "rb");
     if (!fin.error()) {
-      char sig[4], tsig[4];
-      uint32_t compType = Options::GetEncodingCode(Encoding::Z, false);
-      uint32_t mosWidth, mosHeight;
-      uint16_t v16;
+      char tsig[4];
+      unsigned compType, mosWidth, mosHeight;
 
       // parsing TIZ header
-      if (fin.read(sig, 1, 4) != 4) return false;;
-      if (std::strncmp(sig, HEADER_MOZ_SIGNATURE, 4) != 0) {
-        std::printf("Invalid MOZ signature\n");
-        return false;
-      }
-
-      if (fin.read(&v16, 2, 1) != 1) return false;
-      mosWidth = get16u_be(&v16);
-      if (mosWidth == 0) {
-        std::printf("Invalid MOZ width\n");
-        return false;
-      }
-
-      if (fin.read(&v16, 2, 1) != 1) return false;
-      mosHeight = get16u_be(&v16);
-      if (mosHeight == 0) {
-        std::printf("Invalid MOZ height\n");
-        return false;
-      }
+      if (!readMOZ(fin, compType, mosWidth, mosHeight)) return false;
 
       File fout(outFile.c_str(), "wb");
       fout.setDeleteOnClose(true);
@@ -1046,8 +653,8 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
         uint32_t v32;
 
         // creating a memory mapped copy of the output file
-        uint32_t mosCols = (mosWidth + 63) / 64;
-        uint32_t mosRows = (mosHeight + 63) / 64;
+        uint32_t mosCols = (mosWidth + 63) >> 6;
+        uint32_t mosRows = (mosHeight + 63) >> 6;
         uint32_t palOfs = 0x18;                                             // offset to palette data
         uint32_t tileOfs = palOfs + mosCols*mosRows*PALETTE_SIZE;           // offset to tile offset array
         uint32_t dataOfsBase = tileOfs + mosCols*mosRows*4, dataOfsRel = 0;     // abs. and rel. offsets to data blocks
@@ -1055,29 +662,20 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
         BytePtr mosData(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
 
         // writing MOS header
-        uint32_t headerOfs = 0;
-        std::memcpy(mosData.get()+headerOfs, HEADER_MOS_SIGNATURE, 4);
-        headerOfs += 4;
-        std::memcpy(mosData.get()+headerOfs, HEADER_VERSION_V1, 4);
-        headerOfs += 4;
-        v16 = mosWidth; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos width
-        headerOfs += 2;
-        v16 = mosHeight; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos height
-        headerOfs += 2;
-        v16 = mosCols; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos columns
-        headerOfs += 2;
-        v16 = mosRows; v16 = get16u_le(&v16);
-        std::memcpy(mosData.get()+headerOfs, &v16, 2);     // writing mos rows
-        headerOfs += 2;
-        v32 = 0x40; v32 = get32u_le(&v32);
-        std::memcpy(mosData.get()+headerOfs, &v32, 4);     // writing tile dimension
-        headerOfs += 4;
-        v32 = 0x18; v32 = get32u_le(&v32);
-        std::memcpy(mosData.get()+headerOfs, &v32, 4);     // writing offset to palettes
-        headerOfs += 4;
+        std::memcpy(mosData.get(), HEADER_MOS_SIGNATURE, 4);
+        std::memcpy(mosData.get()+4, HEADER_VERSION_V1, 4);
+        v16 = mosWidth;
+        *(uint16_t*)(mosData.get()+8) = get16u_le(&v16);    // writing mos width
+        v16 = mosHeight;
+        *(uint16_t*)(mosData.get()+10) = get16u_le(&v16);   // writing mos height
+        v16 = mosCols;
+        *(uint16_t*)(mosData.get()+12) = get16u_le(&v16);   // writing mos columns
+        v16 = mosRows;
+        *(uint16_t*)(mosData.get()+14) = get16u_le(&v16);   // writing mos rows
+        v32 = 0x40;
+        *(uint32_t*)(mosData.get()+16) = get32u_le(&v32);   // writing tile dimension
+        v32 = 0x18;
+        *(uint32_t*)(mosData.get()+20) = get32u_le(&v32);   // writing offset to palettes
 
         if (getOptions().isVerbose()) {
           std::printf("Width: %d, height: %d, columns: %d, rows: %d, encoding: %d - %s\n",
@@ -1085,34 +683,13 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
         }
         if (getOptions().getVerbosity() == 1) std::printf("Converting");
 
-        ThreadPoolPtr pool = createThreadPool(*this, getOptions().getThreads(), 64);
+        // processing tiles
+        ThreadPoolPtr pool = createThreadPool(getOptions().getThreads(), MAX_POOL_TILES);
         uint32_t tileCount = mosCols * mosRows;
-        uint32_t nextTileIdx = 0, curProgress = 0;
-        int curIndex = 0;                       // the current tile index
-        for (uint32_t row = 0; row < mosRows; row++) {
-          for (uint32_t col = 0; col < mosCols; col++, curIndex++) {
-            if (getOptions().isVerbose()) std::printf("Decoding tile #%d\n", curIndex);
-
-            // writing converted tiles to disk
-            while (pool->hasResult() && pool->peekResult() != nullptr &&
-                   (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
-              TileDataPtr retVal = pool->getResult();
-              if (retVal == nullptr || retVal->isError()) {
-                if (retVal != nullptr && !retVal->getErrorMsg().empty()) {
-                  std::printf("\n%s", retVal->getErrorMsg().c_str());
-                }
-                return false;
-              }
-              if (!writeDecodedMosTile(retVal, mosData, palOfs, tileOfs, dataOfsRel, dataOfsBase)) {
-                return false;
-              }
-              if (getOptions().getVerbosity() == 1) {
-                curProgress = showProgress(nextTileIdx, tileCount, curProgress, MAX_PROGRESS, '.');
-              }
-              nextTileIdx++;
-            }
-
-            // creating new tile data object
+        uint32_t tileIdx = 0, nextTileIdx = 0, curProgress = 0;
+        while (tileIdx < tileCount || !pool->finished()) {
+          // creating new tile data object
+          if (tileIdx < tileCount) {
             uint32_t chunkSize;
             BytePtr ptrIndexed(new uint8_t[MAX_TILE_SIZE_8], std::default_delete<uint8_t[]>());
             BytePtr ptrPalette(new uint8_t[PALETTE_SIZE], std::default_delete<uint8_t[]>());
@@ -1130,23 +707,22 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
               if (fin.read(ptrDeflated.get()+6, 1, chunkSize) != chunkSize) return false;
               chunkSize += 6;
             } else {
-              std::printf("\nInvalid header found in tile #%d\n", curIndex);
+              std::printf("\nInvalid header found in tile #%d\n", tileIdx);
               return false;
             }
             TileDataPtr tileData(new TileData(getOptions()));
             tileData->setEncoding(false);
-            tileData->setIndex(curIndex);
+            tileData->setIndex(tileIdx);
             tileData->setType(compType);
             tileData->setPaletteData(ptrPalette);
             tileData->setIndexedData(ptrIndexed);
             tileData->setDeflatedData(ptrDeflated);
             tileData->setSize(chunkSize);
             pool->addTileData(tileData);
+            tileIdx++;
           }
-        }
 
-        // retrieving the remaining tile data blocks in queue
-        while (!pool->finished()) {
+          // writing converted tiles to disk
           while (pool->hasResult() && pool->peekResult() != nullptr &&
                  (unsigned)pool->peekResult()->getIndex() == nextTileIdx) {
             TileDataPtr retVal = pool->getResult();
@@ -1164,7 +740,9 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
             }
             nextTileIdx++;
           }
-          pool->waitForResult();
+          if (tileIdx >= tileCount) {
+            pool->waitForResult();
+          }
         }
         if (getOptions().getVerbosity() == 1) std::printf("\n");
 
@@ -1173,28 +751,8 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
           return false;
         }
 
-        if (getOptions().isMosc()) {
-          // compressing mos -> mosc
-          uint32_t moscSize = mosSize*2;
-          Compression compression;
-          BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
-
-          // writing MOSC header
-          std::memcpy(moscData.get(), HEADER_MOSC_SIGNATURE, 4);
-          std::memcpy(moscData.get()+4, HEADER_VERSION_V1, 4);
-          v32 = get32u_le(&mosSize);
-          std::memcpy(moscData.get()+8, &v32, 4);
-
-          // compressing data
-          uint32_t size = compression.deflate(mosData.get(), mosSize, moscData.get()+12, moscSize-12);
-          moscSize = size + 12;
-
-          // writing cmos data to file
-          if (fout.write(moscData.get(), 1, moscSize) != moscSize) return false;
-        } else {
-          // writing mos data to file
-          if (fout.write(mosData.get(), 1, mosSize) != mosSize) return false;
-        }
+        // writing MOS/MOSC to disk
+        if (!writeMos(fout, mosData, mosSize)) return false;
 
         // displaying summary
         if (!getOptions().isSilent()) {
@@ -1206,6 +764,371 @@ bool Graphics::mozToMOS(const std::string &inFile, const std::string &outFile) n
       }
     } else {
       std::printf("Error opening file \"%s\"\n", inFile.c_str());
+    }
+  }
+  return false;
+}
+
+
+bool Graphics::readTIS(File &fin, unsigned &numTiles) noexcept
+{
+  char id[4];
+  bool isHeaderless = false;
+  uint32_t v32;
+
+  if (fin.read(id, 1, 4) != 4) return false;
+  if (std::strncmp(id, HEADER_TIS_SIGNATURE, 4) != 0) {
+    if (getOptions().assumeTis()) {
+      isHeaderless = true;
+    } else {
+      std::printf("Invalid TIS signature\n");
+      return false;
+    }
+  }
+
+  if (!isHeaderless) {
+    if (fin.read(id, 1, 4) != 4) return false;
+    if (std::strncmp(id, HEADER_VERSION_V2, 4) == 0) {
+      if (!getOptions().isSilent()) {
+        std::printf("Warning: Incorrect TIS version 2 found. Converting anyway.\n");
+      }
+    } else if (std::strncmp(id, HEADER_VERSION_V1, 4) != 0) {
+      std::printf("Invalid TIS version\n");
+      return false;
+    }
+
+    if (fin.read(&v32, 4, 1) != 1) return false;
+    numTiles = get32u_le(&v32);
+    if (numTiles == 0) {
+      std::printf("No tiles found\n");
+      return false;
+    }
+
+    if (fin.read(&v32, 4, 1) != 1) return false;
+    v32 = get32u_le(&v32);
+    if (v32 != 0x1400) {
+      if (v32 == 0x000c) {
+        std::printf("PVRZ-based TIS files are not supported\n");
+      } else {
+        std::printf("Invalid tile size\n");
+      }
+      return false;
+    }
+
+    if (fin.read(&v32, 4, 1) != 1) return false;
+    v32 = get32u_le(&v32);
+    if (v32 < 0x18) {
+      std::printf("Invalid header size\n");
+      return false;
+    }
+
+    if (fin.read(&v32, 4, 1) != 1) return false;
+    v32 = get32u_le(&v32);
+    if (v32 != 0x40) {
+      std::printf("Invalid tile dimensions\n");
+      return false;
+    }
+  } else {
+    long size = fin.getsize();
+    fin.seek(0L, SEEK_SET);
+    if (size < 0L) {
+      std::printf("Error reading input file\n");
+      return false;
+    } else if ((size % 5120) != 0) {
+      std::printf("Headerless TIS has wrong file size\n");
+      return false;
+    } else {
+      if (!getOptions().isSilent()) std::printf("Warning: Headerless TIS file detected\n");
+      numTiles = (unsigned)size / 0x1400;
+    }
+  }
+
+  return true;
+}
+
+
+bool Graphics::readMOS(File &fin, BytePtr &mos, unsigned &width, unsigned &height,
+                       unsigned &palOfs) noexcept
+{
+  char id[4];
+  uint32_t v32, mosSize;
+
+  // loading MOS/MOSC input file
+  if (fin.read(id, 1, 4) != 4) return false;;
+  if (std::strncmp(id, HEADER_MOSC_SIGNATURE, 4) == 0) {    // decompressing MOSC
+    uint32_t moscSize;
+    Compression compression;
+
+    // getting MOSC file size
+    moscSize = fin.getsize();
+    if (moscSize <= 12) {
+      std::printf("Invalid MOSC size\n");
+      return false;
+    }
+    moscSize -= 12;    // removing header size
+
+    if (fin.read(&id, 1, 4) != 4) return false;
+    if (std::strncmp(id, HEADER_VERSION_V1, 4) != 0) {
+      std::printf("Invalid MOSC version\n");
+      return false;
+    }
+
+    if (fin.read(&v32, 4, 1) != 1) return false;
+    mosSize = get32u_le(&v32);
+    if (mosSize < 24) {
+      std::printf("MOS size too small\n");
+      return false;
+    }
+    BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
+    if (fin.read(moscData.get(), 1, moscSize) < moscSize) {
+      std::printf("Incomplete or corrupted MOSC file\n");
+      return false;
+    }
+
+    mos.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
+    unsigned size = compression.inflate(moscData.get(), moscSize, mos.get(), mosSize);
+    if (size != mosSize) {
+      std::printf("Error while decompressing MOSC input file\n");
+      return false;
+    }
+  } else if (std::strncmp(id, HEADER_MOS_SIGNATURE, 4) == 0) {   // loading MOS data
+    mosSize = fin.getsize();
+    if (mosSize < 24) {
+      std::printf("MOS size too small\n");
+      return false;
+    }
+    fin.seek(0, SEEK_SET);
+    mos.reset(new uint8_t[mosSize], std::default_delete<uint8_t[]>());
+    if (fin.read(mos.get(), 1, mosSize) != mosSize) return false;
+  } else {
+    std::printf("Invalid MOS signature\n");
+    return false;
+  }
+
+  // parsing MOS header
+  uint32_t inOfs = 0;
+  if (std::memcmp(mos.get()+inOfs, HEADER_MOS_SIGNATURE, 4) != 0) {
+    std::printf("Invalid MOS signature\n");
+    return false;
+  }
+  inOfs += 4;
+
+  if (std::memcmp(mos.get()+inOfs, HEADER_VERSION_V1, 4) != 0) {
+    std::printf("Unsupported MOS version\n");
+    return false;
+  }
+  inOfs += 4;
+
+  width = get16u_le((uint16_t*)(mos.get()+inOfs));
+  if (width == 0) {
+    std::printf("Invalid MOS width\n");
+    return false;
+  }
+  inOfs += 2;
+
+  height = get16u_le((uint16_t*)(mos.get()+inOfs));
+  if (height == 0) {
+    std::printf("Invalid MOS height\n");
+    return false;
+  }
+  inOfs += 2;
+
+  if (get16u_le((uint16_t*)(mos.get()+inOfs)) == 0) {
+    std::printf("Invalid number of tiles\n");
+    return false;
+  }
+  inOfs += 2;
+
+  if (get16u_le((uint16_t*)(mos.get()+inOfs)) == 0) {
+    std::printf("Invalid number of tiles\n");
+    return false;
+  }
+  inOfs += 2;
+
+  if (get32u_le((uint32_t*)(mos.get()+inOfs)) != 0x40) {
+    std::printf("Invalid tile dimensions\n");
+    return false;
+  }
+  inOfs += 4;
+
+  palOfs = get32u_le((uint32_t*)(mos.get()+inOfs));
+  if (palOfs < 24) {
+    std::printf("MOS header too small\n");
+    return false;
+  }
+  inOfs = palOfs;
+
+  {
+    unsigned cols = (width+63) >> 6;
+    unsigned rows = (height+63) >> 6;
+    // comparing calculated size with actual input file length
+    uint32_t size = palOfs + cols*rows*PALETTE_SIZE + cols*rows*4 + width*height;
+    if (mosSize < size) {
+      std::printf("Incomplete or corrupted MOS file\n");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+bool Graphics::readTBC(File &fin, unsigned &type, unsigned &numTiles) noexcept
+{
+  char id[4];
+  uint32_t v32;
+
+  // parsing TBC header
+  if (fin.read(id, 1, 4) != 4) return false;;
+  if (std::strncmp(id, HEADER_TBC_SIGNATURE, 4) != 0) {
+    std::printf("Invalid TBC signature\n");
+    return false;
+  }
+
+  if (fin.read(id, 1, 4) != 4) return false;
+  if (std::strncmp(id, HEADER_VERSION_V1_0, 4) != 0) {
+    std::printf("Unsupported TBC version\n");
+    return false;
+  }
+
+  if (fin.read(&v32, 4, 1) != 1) return false;
+  type = get32u_le(&v32);
+
+  if (fin.read(&v32, 4, 1) != 1) return false;
+  numTiles = get32u_le(&v32);
+  if (numTiles == 0) {
+    std::printf("No tiles found\n");
+    return false;
+  }
+
+  return true;
+}
+
+
+bool Graphics::readMBC(File &fin, unsigned &type, unsigned &width, unsigned &height) noexcept
+{
+  char id[4];
+  uint32_t v32;
+
+  // parsing TBC header
+  if (fin.read(id, 1, 4) != 4) return false;;
+  if (std::strncmp(id, HEADER_MBC_SIGNATURE, 4) != 0) {
+    std::printf("Invalid MBC signature\n");
+    return false;
+  }
+
+  if (fin.read(id, 1, 4) != 4) return false;
+  if (std::strncmp(id, HEADER_VERSION_V1_0, 4) != 0) {
+    std::printf("Invalid MBC version\n");
+    return false;
+  }
+
+  if (fin.read(&v32, 4, 1) != 1) return false;
+  type = get32u_le(&v32);
+
+  if (fin.read(&v32, 4, 1) != 1) return false;
+  width = get32u_le(&v32);
+  if (width == 0) {
+    std::printf("Invalid MBC width\n");
+    return false;
+  }
+
+  if (fin.read(&v32, 4, 1) != 1) return false;
+  height = get32u_le(&v32);
+  if (height == 0) {
+    std::printf("Invalid MBC height\n");
+    return false;
+  }
+
+  return true;
+}
+
+
+bool Graphics::readTIZ(File &fin, unsigned &type, unsigned &numTiles) noexcept
+{
+  char id[4];
+  uint16_t v16;
+
+  type = Options::GetEncodingCode(Encoding::Z, false);
+
+  // parsing TIZ header
+  if (fin.read(id, 1, 4) != 4) return false;;
+  if (std::strncmp(id, HEADER_TIZ_SIGNATURE, 4) != 0) {
+    std::printf("Invalid TIZ signature\n");
+    return false;
+  }
+
+  if (fin.read(&v16, 2, 1) != 1) return false;
+  numTiles = get16u_be(&v16);
+  if (numTiles == 0) {
+    std::printf("No tiles found\n");
+    return false;
+  }
+
+  // skipping 2 bytes
+  if (fin.read(&v16, 2, 1) != 1) return false;
+
+  return true;
+}
+
+
+bool Graphics::readMOZ(File &fin, unsigned &type, unsigned &width, unsigned &height) noexcept
+{
+  char id[4];
+  uint16_t v16;
+
+  type = Options::GetEncodingCode(Encoding::Z, false);
+
+  // parsing TIZ header
+  if (fin.read(id, 1, 4) != 4) return false;;
+  if (std::strncmp(id, HEADER_MOZ_SIGNATURE, 4) != 0) {
+    std::printf("Invalid MOZ signature\n");
+    return false;
+  }
+
+  if (fin.read(&v16, 2, 1) != 1) return false;
+  width = get16u_be(&v16);
+  if (width == 0) {
+    std::printf("Invalid MOZ width\n");
+    return false;
+  }
+
+  if (fin.read(&v16, 2, 1) != 1) return false;
+  height = get16u_be(&v16);
+  if (height == 0) {
+    std::printf("Invalid MOZ height\n");
+    return false;
+  }
+
+  return true;
+}
+
+
+bool Graphics::writeMos(File &fout, BytePtr &mos, unsigned size) noexcept
+{
+  if (mos != nullptr && size > 0) {
+    if (getOptions().isMosc()) {
+      // compressing mos -> mosc
+      uint32_t moscSize = size*2;
+      uint32_t v32;
+      Compression compression;
+      BytePtr moscData(new uint8_t[moscSize], std::default_delete<uint8_t[]>());
+
+      // writing MOSC header
+      std::memcpy(moscData.get(), HEADER_MOSC_SIGNATURE, 4);
+      std::memcpy(moscData.get()+4, HEADER_VERSION_V1, 4);
+      v32 = size;
+      *(uint32_t*)(moscData.get()+8) = get32u_le(&v32);
+
+      // compressing data
+      moscSize = compression.deflate(mos.get(), size, moscData.get()+12, moscSize-12);
+      moscSize += 12;
+
+      // writing cmos data to file
+      if (fout.write(moscData.get(), 1, moscSize) == moscSize) return true;
+    } else {
+      // writing mos data to file
+      if (fout.write(mos.get(), 1, size) == size) return true;
     }
   }
   return false;

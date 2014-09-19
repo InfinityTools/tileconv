@@ -20,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #ifdef USE_WINTHREADS
-#include "graphics.h"
 #include "tilethreadpool_win32.h"
 
 namespace tc {
@@ -33,14 +32,14 @@ unsigned getThreadPoolAutoThreads()
 }
 
 
-ThreadPoolPtr createThreadPool(Graphics &gfx, int threadNum, int tileNum)
+ThreadPoolPtr createThreadPool(int threadNum, int tileNum)
 {
-  return ThreadPoolPtr(new TileThreadPoolWin32(gfx, threadNum, tileNum));
+  return ThreadPoolPtr(new TileThreadPoolWin32(threadNum, tileNum));
 }
 
 
-TileThreadPoolWin32::TileThreadPoolWin32(Graphics &gfx, unsigned threadNum, unsigned tileNum) noexcept
-: TileThreadPool(gfx, tileNum)
+TileThreadPoolWin32::TileThreadPoolWin32(unsigned threadNum, unsigned tileNum) noexcept
+: TileThreadPool(tileNum)
 , m_activeThreads(0)
 , m_mainThread(::GetCurrentThread())
 , m_activeMutex(::CreateMutex(NULL, FALSE, NULL))
