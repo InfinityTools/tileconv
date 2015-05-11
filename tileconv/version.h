@@ -21,5 +21,6 @@ THE SOFTWARE.
 */
 extern int vers_major;
 extern int vers_minor;
+extern int vers_patch;
 extern char prog_name[];
 extern char author[];

@@ -21,5 +21,6 @@ THE SOFTWARE.
 */
 int vers_major = 0;
 int vers_minor = 5;
+int vers_patch = 0;
 char prog_name[] = "tileconv";
 char author[] = "Argent77";
