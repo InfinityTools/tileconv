@@ -34,7 +34,7 @@ namespace tc {
 class TileThreadPoolPosix : public TileThreadPool
 {
 public:
-  TileThreadPoolPosix(Graphics &gfx, unsigned threadNum, unsigned tileNum) noexcept;
+  TileThreadPoolPosix(unsigned threadNum, unsigned tileNum) noexcept;
   ~TileThreadPoolPosix() noexcept;
 
   /** See TileThreadPool::addTileData() */

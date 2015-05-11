@@ -83,6 +83,7 @@ File::File(const char *fileName, const char *mode) noexcept
   }
 }
 
+
 File::File(const char *fileName, const char *mode, int bufferSize) noexcept
 : m_file(0)
 , m_fileName()
@@ -100,6 +101,7 @@ File::File(const char *fileName, const char *mode, int bufferSize) noexcept
   }
 }
 
+
 File::~File() noexcept
 {
   if (m_file != nullptr) {
@@ -115,6 +117,7 @@ File::~File() noexcept
     std::remove(m_fileName.c_str());
   }
 }
+
 
 bool File::reopen(const char *fileName, const char *mode) noexcept
 {
@@ -132,6 +135,7 @@ bool File::reopen(const char *fileName, const char *mode) noexcept
   return false;
 }
 
+
 bool File::flush() noexcept
 {
   if (m_file) {
@@ -139,6 +143,7 @@ bool File::flush() noexcept
   }
   return false;
 }
+
 
 std::size_t File::read(void *buffer, std::size_t size, std::size_t count) noexcept
 {
@@ -148,6 +153,7 @@ std::size_t File::read(void *buffer, std::size_t size, std::size_t count) noexce
   return 0;
 }
 
+
 std::size_t File::write(const void *buffer, std::size_t size, std::size_t count) noexcept
 {
   if (m_file) {
@@ -155,6 +161,7 @@ std::size_t File::write(const void *buffer, std::size_t size, std::size_t count)
   }
   return 0;
 }
+
 
 int File::getc() noexcept
 {
@@ -164,6 +171,7 @@ int File::getc() noexcept
   return EOF;
 }
 
+
 char* File::gets(char *str, int count) noexcept
 {
   if (m_file) {
@@ -171,6 +179,7 @@ char* File::gets(char *str, int count) noexcept
   }
   return NULL;
 }
+
 
 int File::putc(int ch) noexcept
 {
@@ -180,6 +189,7 @@ int File::putc(int ch) noexcept
   return EOF;
 }
 
+
 int File::puts(const char *str) noexcept
 {
   if (m_file) {
@@ -187,6 +197,7 @@ int File::puts(const char *str) noexcept
   }
   return EOF;
 }
+
 
 int File::ungetc(int ch) noexcept
 {
@@ -196,6 +207,7 @@ int File::ungetc(int ch) noexcept
   return EOF;
 }
 
+
 long File::tell() noexcept
 {
   if (m_file) {
@@ -203,6 +215,7 @@ long File::tell() noexcept
   }
   return -1L;
 }
+
 
 bool File::getpos(std::fpos_t *pos) noexcept
 {
@@ -212,6 +225,7 @@ bool File::getpos(std::fpos_t *pos) noexcept
   return false;
 }
 
+
 bool File::seek(long offset, int origin) noexcept
 {
   if (m_file) {
@@ -219,6 +233,7 @@ bool File::seek(long offset, int origin) noexcept
   }
   return false;
 }
+
 
 bool File::setpos(const std::fpos_t *pos) noexcept
 {
@@ -228,6 +243,7 @@ bool File::setpos(const std::fpos_t *pos) noexcept
   return false;
 }
 
+
 void File::rewind() noexcept
 {
   if (m_file) {
@@ -235,12 +251,14 @@ void File::rewind() noexcept
   }
 }
 
+
 void File::clearerr() noexcept
 {
   if (m_file) {
     std::clearerr(m_file);
   }
 }
+
 
 bool File::eof() noexcept
 {
@@ -250,6 +268,7 @@ bool File::eof() noexcept
   return true;
 }
 
+
 bool File::error() noexcept
 {
   if (m_file) {
@@ -257,6 +276,7 @@ bool File::error() noexcept
   }
   return true;
 }
+
 
 void File::perror(const char *s) noexcept
 {

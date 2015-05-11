@@ -135,6 +135,13 @@ public:
   bool isWriteEnabled() const noexcept;
 
 private:
+  /** Not copyable. */
+  File(const File &) = delete;
+
+  /** Not assignable. */
+  File& operator=(const File &) = delete;
+
+private:
   std::FILE     *m_file;          // current file handle
   std::string   m_fileName;       // filename
   std::string   m_mode;           // current file mode

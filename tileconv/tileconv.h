@@ -26,7 +26,7 @@ THE SOFTWARE.
 
 namespace tc {
 
-/** High level class for converting TIS<->TBC and MOS<->MBC. */
+/** High level conversion class. */
 class TileConv
 {
 public:

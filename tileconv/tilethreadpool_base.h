@@ -23,7 +23,6 @@ THE SOFTWARE.
 #define _TILETHREADPOOL_BASE_H_
 #include <queue>
 #include "tiledata.h"
-#include "graphics.h"
 
 namespace tc {
 
@@ -42,7 +41,7 @@ unsigned getThreadPoolAutoThreads();
  * Dynamically create and return a new thread pool instance encapsulated in a smart pointer.
  * (Defined together with specialized thread pool classes.)
  */
-ThreadPoolPtr createThreadPool(Graphics &gfx, int threadNum, int tileNum);
+ThreadPoolPtr createThreadPool(int threadNum, int tileNum);
 
 
 class TileThreadPool
@@ -53,13 +52,6 @@ public:
 
   /** Max. number of allowed tile data blocks to add for processing. */
   static const unsigned MAX_TILES;
-
-//  static unsigned GetMaxThreads() noexcept;
-
-  /** Detected number of separate threads on the current CPU. */
-//  static unsigned GetAutoThreads() noexcept;
-
-//  static unsigned GetMaxTiles() noexcept;
 
 public:
   virtual ~TileThreadPool() noexcept {}
@@ -93,7 +85,7 @@ protected:
   typedef std::queue<TileDataPtr> TileQueue;
   typedef std::priority_queue<TileDataPtr, std::vector<TileDataPtr>, std::greater<TileDataPtr>> ResultQueue;
 
-  TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept;
+  TileThreadPool(unsigned tileNum) noexcept;
 
   // Called whenever a thread is about to execute another encoding/decoding function
   virtual void threadActivated() noexcept = 0;
@@ -101,10 +93,6 @@ protected:
   virtual void threadDeactivated() noexcept = 0;
   // Returns the number of active threads
   virtual int getActiveThreads() noexcept = 0;
-
-  // Access to associated Graphics instance
-  Graphics& getGraphics() noexcept { return m_gfx; }
-  const Graphics& getGraphics() const noexcept { return m_gfx; }
 
   // Access to input queue
   TileQueue& getTileQueue() noexcept { return m_tiles; }
@@ -120,7 +108,6 @@ protected:
   void setTerminate(bool b) noexcept { m_terminate = b; }
 
 private:
-  Graphics      &m_gfx;
   bool          m_terminate;
   unsigned      m_maxTiles;
   TileQueue     m_tiles;

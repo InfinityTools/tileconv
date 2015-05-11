@@ -166,7 +166,7 @@ bool Options::init(int argc, char *argv[]) noexcept
         setShowInfo(true);
         break;
       case 'V':
-        std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
+        std::printf("%s %d.%d.%d by %s\n", prog_name, vers_major, vers_minor, vers_patch, author);
         return false;
       default:
         std::printf("Unrecognized parameter \"-%c\"\n", optopt);

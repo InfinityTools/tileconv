@@ -54,6 +54,22 @@ public:
   const Options& getOptions() const noexcept { return m_options; }
 
 private:
+  // Read TIS header data. File points to start of tile data afterwards.
+  bool readTIS(File &fin, unsigned &numTiles) noexcept;
+  // Reads MOS file. mos contains uncompressed MOS data.
+  bool readMOS(File &fin, BytePtr &mos, unsigned &width, unsigned &height, unsigned &palOfs) noexcept;
+  // Reads TBC header data. File points to start of tile data afterwards.
+  bool readTBC(File &fin, unsigned &type, unsigned &numTiles) noexcept;
+  // Reads MBC header data. File points to start of tile data afterwards.
+  bool readMBC(File &fin, unsigned &type, unsigned &width, unsigned &height) noexcept;
+  // Reads TIZ header data. File points to start of tile data afterwards.
+  bool readTIZ(File &fin, unsigned &type, unsigned &numTiles) noexcept;
+  // Reads MOZ header data. File points to start of tile data afterwards.
+  bool readMOZ(File &fin, unsigned &type, unsigned &width, unsigned &height) noexcept;
+
+  // write data as MOS or MOSC to disk
+  bool writeMos(File &fout, BytePtr &mos, unsigned size) noexcept;
+
   // Called by tisToTBC() and mosToMBC() to write an encoded tile to the output file
   bool writeEncodedTile(TileDataPtr tileData, File &file, double &ratio) noexcept;
 
@@ -88,6 +104,7 @@ public:
 
 private:
   static const unsigned MAX_PROGRESS;                 // Available space for a progress bar
+  static const unsigned MAX_POOL_TILES;               // Max. storage of tiles in thread pool
 
   const Options&  m_options;
 };

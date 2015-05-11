@@ -1,7 +1,7 @@
 TILECONV
 ~~~~~~~~
 
-Version: 0.5
+Version: 0.5.1
 Author:  Argent77
 
 This tool allows you to compress or decompress TIS and MOS files provided by 
@@ -128,3 +128,6 @@ v0.5 (2014-09-18)
   * Added TIZ/MOZ decompression support
   * Option -T is recognized by option -I
   * Incomplete output files are deleted on error
+
+v0.5.1 (2015-05-10)
+  * Fixed potential issues with the Mac OS X version

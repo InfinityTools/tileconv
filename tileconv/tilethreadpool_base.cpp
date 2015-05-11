@@ -28,9 +28,8 @@ const unsigned TileThreadPool::MAX_THREADS  = 256u;
 const unsigned TileThreadPool::MAX_TILES    = std::numeric_limits<int>::max();
 
 
-TileThreadPool::TileThreadPool(Graphics &gfx, unsigned tileNum) noexcept
-: m_gfx(gfx)
-, m_terminate(false)
+TileThreadPool::TileThreadPool(unsigned tileNum) noexcept
+: m_terminate(false)
 , m_maxTiles(MAX_TILES)
 , m_tiles()
 , m_results()

@@ -25,6 +25,8 @@ else
   ifeq ($(shell uname -s),Darwin)
     # A few hacks to enable proper threading support
     CXXFLAGS    += -D_GLIBCXX_USE_NANOSLEEP
+    # Don't assume that standard libraries are available on the target system
+    LDFLAGS     += -static-libstdc++ -static-libgcc
   else
     # Nothing to do for Linux (yet)
   endif
