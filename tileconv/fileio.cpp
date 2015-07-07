@@ -20,54 +20,250 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include "fileio.h"
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#ifdef _WIN32
+# include <windows.h>
+#else
+# include <sys/types.h>
+# include <sys/stat.h>
+# include <unistd.h>
+#endif
 
 namespace tc {
 
-bool File::IsDirectory(const char *fileName) noexcept
+#ifdef _WIN32
+const char File::PATH_SEPARATOR = '\\';
+#else
+const char File::PATH_SEPARATOR = '/';
+#endif
+
+
+std::string File::ExtractFilePath(const std::string &fileName) noexcept
 {
-  if (fileName != nullptr) {
-    struct stat s;
-    if (stat(fileName, &s) != -1) {
-      return S_ISDIR(s.st_mode);
+  std::string retVal;
+  if (!fileName.empty()) {
+    if (IsPathSeparator(fileName.at(fileName.size() - 1))) {
+      retVal = fileName;
+    } else {
+      std::string::size_type pos = fileName.find_last_of(PATH_SEPARATOR);
+      if (pos == std::string::npos) {
+        pos = fileName.find_last_of('/');
+      }
+      if (pos != std::string::npos) {
+        retVal = fileName.substr(0, pos);
+      }
     }
   }
-  return false;
+  return retVal;
 }
 
-
-long File::GetFileSize(const char *fileName) noexcept
+std::string File::ExtractFileName(const std::string &fileName) noexcept
 {
-  if (fileName != nullptr) {
+  std::string retVal;
+  if (!fileName.empty() && !IsPathSeparator(fileName.at(fileName.size() - 1))) {
+    std::string::size_type pos = fileName.find_last_of(PATH_SEPARATOR);
+    if (pos == std::string::npos) {
+      pos = fileName.find_last_of('/');
+    }
+    if (pos != std::string::npos) {
+      retVal = fileName.substr(pos+1);
+    } else {
+      retVal = fileName;
+    }
+  }
+  return retVal;
+}
+
+std::string File::ExtractFileBase(const std::string &fileName) noexcept
+{
+  std::string retVal = ExtractFileName(fileName);
+  if (!retVal.empty()) {
+    std::string::size_type pos = retVal.find_last_of('.');
+    if (pos != std::string::npos) {
+      retVal = retVal.substr(0, pos);
+    }
+  }
+  return retVal;
+}
+
+std::string File::ExtractFileExt(const std::string &fileName) noexcept
+{
+  std::string retVal = ExtractFileName(fileName);
+  std::string::size_type pos = retVal.find_last_of('.');
+  if (pos != std::string::npos) {
+    retVal = retVal.substr(pos);
+  } else {
+    retVal.clear();
+  }
+  return retVal;
+}
+
+std::string File::CreateFileName(const std::string &path, const std::string &file) noexcept
+{
+  std::string retVal;
+  if (!path.empty()) {
+    retVal += path;
+    if (!IsPathSeparator(path.at(path.size() - 1))) {
+      retVal += PATH_SEPARATOR;
+    }
+  }
+  if (!file.empty()) {
+    retVal += file;
+  }
+  return retVal;
+}
+
+std::string File::ChangeFileExt(const std::string &fileName, const std::string &fileExt) noexcept
+{
+  std::string retVal;
+  if (!fileName.empty()) {
+    std::string path = ExtractFilePath(fileName);
+    std::string name = ExtractFileBase(fileName);
+    if (!name.empty()) {
+      if (!fileExt.empty() && fileExt.at(0) != '.') {
+        name += '.';
+      }
+      name += fileExt;
+      retVal = CreateFileName(path, name);
+    } else {
+      retVal = fileName;
+    }
+  }
+  return retVal;
+}
+
+bool File::IsPathSeparator(char ch) noexcept
+{
+  // Note: '/' is always valid
+  return (ch == PATH_SEPARATOR || ch == '/');
+}
+
+bool File::IsDirectory(const std::string &fileName) noexcept
+{
+  bool retVal = false;
+  if (!fileName.empty()) {
+#ifdef _WIN32
+    DWORD flags = ::GetFileAttributes(fileName.c_str());
+    if (flags != INVALID_FILE_ATTRIBUTES) {
+      retVal = (flags & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    }
+#else
     struct stat s;
-    if (stat(fileName, &s) != -1) {
+    if (::stat(fileName.c_str(), &s) != -1) {
+      return S_ISDIR(s.st_mode);
+    }
+#endif
+  }
+  return retVal;
+}
+
+bool File::Exists(const std::string &path) noexcept
+{
+  bool retVal = false;
+  if (!path.empty()) {
+#ifdef _WIN32
+    retVal = (::GetFileAttributes(path.c_str()) != INVALID_FILE_ATTRIBUTES);
+#else
+    struct stat s;
+    retVal = (::stat(path.c_str(), &s) == 0);
+#endif
+  }
+  return retVal;
+}
+
+long File::GetFileSize(const std::string &fileName) noexcept
+{
+  if (!fileName.empty()) {
+#ifdef _WIN32
+    HANDLE h = ::CreateFile(fileName.c_str(), 0, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if (h != INVALID_HANDLE_VALUE) {
+      DWORD size = ::GetFileSize(h, NULL);
+      ::CloseHandle(h);
+      if (size != INVALID_FILE_SIZE) {
+        return size;
+      }
+    }
+#else
+    struct stat s;
+    if (::stat(fileName.c_str(), &s) != -1) {
       return s.st_size;
     }
+#endif
   }
   return -1L;
 }
 
-
-bool File::RemoveFile(const char *fileName) noexcept
+bool File::RemoveFile(const std::string &fileName) noexcept
 {
-  if (fileName != nullptr) {
-    return (std::remove(fileName) == 0);
+  if (!fileName.empty()) {
+    return (std::remove(fileName.c_str()) == 0);
   }
   return false;
 }
 
-
-bool File::RenameFile(const char *oldFileName, const char *newFileName) noexcept
+bool File::RenameFile(const std::string &oldFileName, const std::string &newFileName) noexcept
 {
-  if (oldFileName != nullptr && *oldFileName != 0 &&
-      newFileName != nullptr && *newFileName != 0) {
-    return (std::rename(oldFileName, newFileName) == 0);
+  if (!oldFileName.empty() && !newFileName.empty()) {
+    return (std::rename(oldFileName.c_str(), newFileName.c_str()) == 0);
   }
   return false;
 }
 
+bool File::IsEqual(const std::string &path1, const std::string &path2) noexcept
+{
+  bool retVal = false;
+
+  if (!path1.empty() && !path2.empty()) {
+#ifdef _WIN32
+    HANDLE h2 = ::CreateFile(path2.c_str(), 0, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+    HANDLE h1 = ::CreateFile(path1.c_str(), 0, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if (h1 == INVALID_HANDLE_VALUE || h2 == INVALID_HANDLE_VALUE) {
+      if (h2 != INVALID_HANDLE_VALUE) {
+        ::CloseHandle(h2);
+      }
+      if (h1 != INVALID_HANDLE_VALUE) {
+        ::CloseHandle(h1);
+      }
+      return retVal;
+    }
+
+    BY_HANDLE_FILE_INFORMATION info1, info2;
+    bool b1 = ::GetFileInformationByHandle(h1, &info1);
+    bool b2 = ::GetFileInformationByHandle(h2, &info2);
+    if (!b1 || !b2) {
+      ::CloseHandle(h2);
+      ::CloseHandle(h1);
+      return retVal;
+    }
+
+    retVal = (info1.dwVolumeSerialNumber == info2.dwVolumeSerialNumber) &&
+             (info1.nFileIndexHigh == info2.nFileIndexHigh) &&
+             (info1.nFileIndexLow == info2.nFileIndexLow) &&
+             (info1.nFileSizeHigh == info2.nFileSizeHigh) &&
+             (info1.nFileSizeLow == info2.nFileSizeLow) &&
+             (info1.ftLastWriteTime.dwLowDateTime == info2.ftLastWriteTime.dwLowDateTime) &&
+             (info1.ftLastWriteTime.dwHighDateTime == info2.ftLastWriteTime.dwHighDateTime);
+
+      ::CloseHandle(h2);
+      ::CloseHandle(h1);
+
+#else
+      struct stat s1, s2;
+      int e2 = ::stat(path2.c_str(), &s2);
+      int e1 = ::stat(path1.c_str(), &s1);
+      if (e1 == 0 && e2 == 0) {
+        retVal = (s1.st_dev == s2.st_dev) &&
+                 (s1.st_ino == s2.st_ino) &&
+                 (s1.st_size == s2.st_size) &&
+                 (s1.st_mtime == s2.st_mtime);
+      }
+
+#endif
+  }
+  return retVal;
+}
 
 File::File(const char *fileName, const char *mode) noexcept
 : m_file(0)

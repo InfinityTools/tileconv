@@ -40,8 +40,18 @@ public:
    */
   static FileType GetFileType(const std::string &fileName, bool assumeTis) noexcept;
 
-  /** Returns the given input filename with the new file extension as specified by type. */
-  static std::string SetFileExt(const std::string &fileName, FileType type) noexcept;
+  /** Returns the file extension based on the specified type. Returns empty string on error. */
+  static std::string GetFileExt(FileType type) noexcept;
+
+  /**
+   * Returns a filename for the output file based on the specified parameters.
+   * Appends output file by a number if filename already exists (e.g. foo.bar-0, foo.bar-1, ...).
+   * \param path Output path.
+   * \param inputFile Input file with path.
+   * \return Full path to output filename or empty string on error.
+   */
+  static std::string GetOutputFileName(const std::string &path, const std::string inputFile,
+                                       FileType type, bool overwrite) noexcept;
 
   /** Returns the encoding type for the given numeric code. Returns Encoding::UNKNOWN on error. */
   static Encoding GetEncodingType(int code) noexcept;

@@ -94,25 +94,59 @@ bool TileConv::execute() noexcept
       std::printf("\nProcessing file %d of %d\n", i+1, getOptions().getInputCount());
     }
     const std::string &inputFile = getOptions().getInput(i);
+    if (!File::Exists(inputFile)) {
+      retVal = false;
+      std::printf("File does not exist: \"%s\"\n", inputFile.c_str());
+      if (getOptions().isHaltOnError()) {
+        return retVal;
+      } else {
+        continue;
+      }
+    }
+
+    FileType fileType = Options::GetFileType(inputFile, getOptions().assumeTis());
+
     std::string outputFile;
+    // generating output filename
+    if (getOptions().isOutFile()) {
+      outputFile = File::CreateFileName(getOptions().getOutPath(), getOptions().getOutFile());
+    } else {
+      switch (fileType) {
+        case FileType::TIS:
+          outputFile = Options::GetOutputFileName(getOptions().getOutPath(), inputFile, FileType::TBC, false);
+          break;
+        case FileType::MOS:
+          outputFile = Options::GetOutputFileName(getOptions().getOutPath(), inputFile, FileType::MBC, false);
+          break;
+        case FileType::TBC:
+        case FileType::TIZ:
+          outputFile = Options::GetOutputFileName(getOptions().getOutPath(), inputFile, FileType::TIS, false);
+          break;
+        case FileType::MBC:
+        case FileType::MOZ:
+          outputFile = Options::GetOutputFileName(getOptions().getOutPath(), inputFile, FileType::MOS, false);
+          break;
+        default:
+          outputFile.clear();
+          break;
+      }
+    }
+    if (outputFile.empty()) {
+      retVal = false;
+      std::printf("Error creating output filename\n");
+      if (getOptions().isHaltOnError()) {
+        return retVal;
+      }
+    } else if (File::IsEqual(inputFile, outputFile)) {
+      std::printf("Error: Input file and output file are equal: %s\n", inputFile.c_str());
+      if (getOptions().isHaltOnError()) {
+        return retVal;
+      }
+    }
+
     if (!inputFile.empty()) {
       switch (Options::GetFileType(inputFile, getOptions().assumeTis())) {
         case FileType::TIS:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TBC);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting TIS -> TBC\n");
@@ -127,21 +161,6 @@ bool TileConv::execute() noexcept
           }
           break;
         case FileType::MOS:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MBC);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting MOS -> MBC\n");
@@ -156,21 +175,6 @@ bool TileConv::execute() noexcept
           }
           break;
         case FileType::TBC:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TIS);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting TBC -> TIS\n");
@@ -185,21 +189,6 @@ bool TileConv::execute() noexcept
           }
           break;
         case FileType::MBC:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MOS);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting MBC -> MOS\n");
@@ -214,21 +203,6 @@ bool TileConv::execute() noexcept
           }
           break;
         case FileType::TIZ:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::TIS);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting TIZ -> TIS\n");
@@ -243,21 +217,6 @@ bool TileConv::execute() noexcept
           }
           break;
         case FileType::MOZ:
-          // generating output filename
-          if (getOptions().isOutFile()) {
-            outputFile = getOptions().getOutPath() + getOptions().getOutFile();
-          } else {
-            outputFile = getOptions().getOutPath() + Options::SetFileExt(inputFile, FileType::MOS);
-          }
-          if (outputFile.empty()) {
-            retVal = false;
-            std::printf("Error creating output filename\n");
-            if (getOptions().isHaltOnError()) {
-              return retVal;
-            } else {
-              break;
-            }
-          }
           // converting
           if (!getOptions().isSilent()) {
             std::printf("Converting MOZ -> MOS\n");

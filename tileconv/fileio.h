@@ -33,17 +33,44 @@ namespace tc {
 class File
 {
 public:
+  /** Extracts the full path component of the given file name. */
+  static std::string ExtractFilePath(const std::string &fileName) noexcept;
+  /** Extracts the top-level path component of the given file name which can be filename or folder. */
+  static std::string ExtractFileName(const std::string &fileName) noexcept;
+  /** Extracts the top-level path component without extension. */
+  static std::string ExtractFileBase(const std::string &fileName) noexcept;
+  /** Extracts the file extension of the top-level path component. */
+  static std::string ExtractFileExt(const std::string &fileName) noexcept;
+
+  /** Concatenates path and file and returns the result. */
+  static std::string CreateFileName(const std::string &path, const std::string &file) noexcept;
+
+  /** Changes the file extension of the specified filename. */
+  static std::string ChangeFileExt(const std::string &fileName, const std::string &fileExt) noexcept;
+
+  /** Returns true if the specified character is a path separator. */
+  static bool IsPathSeparator(char ch) noexcept;
+
   /** Returns true only if the given path is a directory. */
-  static bool IsDirectory(const char *fileName) noexcept;
+  static bool IsDirectory(const std::string &fileName) noexcept;
+
+  /**
+   * Returns true only if the given path exists (can be regular file, folder
+   * or any other kind of file type).
+   */
+  static bool Exists(const std::string &path) noexcept;
 
   /** Returns size of the given file in bytes. Returns -1 on error. */
-  static long GetFileSize(const char *fileName) noexcept;
+  static long GetFileSize(const std::string &fileName) noexcept;
 
   /** Deletes the file identified by the given name. */
-  static bool RemoveFile(const char *fileName) noexcept;
+  static bool RemoveFile(const std::string &fileName) noexcept;
 
   /** Changes the name of a file. */
-  static bool RenameFile(const char *oldFileName, const char *newFileName) noexcept;
+  static bool RenameFile(const std::string &oldFileName, const std::string &newFileName) noexcept;
+
+  /** Returns whether the two specified path strings are pointing to the same file. */
+  static bool IsEqual(const std::string &path1, const std::string &path2) noexcept;
 
 public:
   /** Opens a file in the specified mode. */
@@ -142,6 +169,8 @@ private:
   File& operator=(const File &) = delete;
 
 private:
+  static const char   PATH_SEPARATOR; // OS-specific path separator character (either '\' or '/')
+
   std::FILE     *m_file;          // current file handle
   std::string   m_fileName;       // filename
   std::string   m_mode;           // current file mode
