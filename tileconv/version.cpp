@@ -22,8 +22,8 @@ THE SOFTWARE.
 #include "version.h"
 
 int vers_major = 0;
-int vers_minor = 5;
-int vers_patch = 1;
+int vers_minor = 6;
+int vers_patch = 0;
 char vers_suffix[] = "";
 char prog_name[] = "tileconv";
 char author[] = "Argent77";
