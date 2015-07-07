@@ -19,8 +19,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#include "version.h"
+
 int vers_major = 0;
 int vers_minor = 5;
 int vers_patch = 1;
+char vers_suffix[] = "";
 char prog_name[] = "tileconv";
 char author[] = "Argent77";

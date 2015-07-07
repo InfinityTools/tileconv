@@ -166,7 +166,15 @@ bool Options::init(int argc, char *argv[]) noexcept
         setShowInfo(true);
         break;
       case 'V':
-        std::printf("%s %d.%d.%d by %s\n", prog_name, vers_major, vers_minor, vers_patch, author);
+        if (std::strlen(vers_suffix)) {
+          std::printf("%s %d.%d.%d (%s) by %s\n", prog_name, vers_major, vers_minor, vers_patch, vers_suffix, author);
+        } else {
+          if (vers_patch != 0) {
+            std::printf("%s %d.%d.%d by %s\n", prog_name, vers_major, vers_minor, vers_patch, author);
+          } else {
+            std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
+          }
+        }
         return false;
       default:
         std::printf("Unrecognized parameter \"-%c\"\n", optopt);
