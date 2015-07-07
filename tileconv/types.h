@@ -32,7 +32,6 @@ namespace tc {
 #define ENCODE_DXT1 1
 #define ENCODE_DXT3 2
 #define ENCODE_DXT5 3
-//#define ENCODE_WEBP 4
 #define ENCODE_Z    255
 
 /**

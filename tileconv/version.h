@@ -19,8 +19,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _VERSION_H_
+#define _VERSION_H_
+
 extern int vers_major;
 extern int vers_minor;
 extern int vers_patch;
+extern char vers_suffix[];
 extern char prog_name[];
 extern char author[];
+
+#endif  // _VERSION_H_

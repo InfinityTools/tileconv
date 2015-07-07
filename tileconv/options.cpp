@@ -166,7 +166,15 @@ bool Options::init(int argc, char *argv[]) noexcept
         setShowInfo(true);
         break;
       case 'V':
-        std::printf("%s %d.%d.%d by %s\n", prog_name, vers_major, vers_minor, vers_patch, author);
+        if (std::strlen(vers_suffix)) {
+          std::printf("%s %d.%d.%d (%s) by %s\n", prog_name, vers_major, vers_minor, vers_patch, vers_suffix, author);
+        } else {
+          if (vers_patch != 0) {
+            std::printf("%s %d.%d.%d by %s\n", prog_name, vers_major, vers_minor, vers_patch, author);
+          } else {
+            std::printf("%s %d.%d by %s\n", prog_name, vers_major, vers_minor, author);
+          }
+        }
         return false;
       default:
         std::printf("Unrecognized parameter \"-%c\"\n", optopt);
@@ -296,31 +304,12 @@ const std::string& Options::getInput(int idx) const noexcept
 bool Options::setOutput(const std::string &outFile) noexcept
 {
   if (!outFile.empty()) {
-    // determining if outFile contains filename
-    std::size_t pos = 0, size = outFile.size();
-    if (!File::IsDirectory(outFile.c_str())) {
-      // splitting file name from path
-      pos = std::max(outFile.find_last_of('/'), outFile.find_last_of('\\'));
-      if (pos != std::string::npos) {
-        size = outFile.size() - pos - 1;
-        m_outFile.assign(outFile.substr(pos + 1, size));
-        size = pos;
-        pos = 0;
-      } else {
-        m_outFile.assign(outFile);
-        pos = size = 0;
-      }
-    } else {
+    if (File::IsDirectory(outFile.c_str())) {
+      m_outPath.assign(outFile);
       m_outFile.clear();
-    }
-
-    // setting path
-    m_outPath.assign(outFile.substr(pos, size));
-    if (!m_outPath.empty()) {
-      char ch = m_outPath.back();
-      if (ch != '/' && ch != '\\') {
-        m_outPath.append("/");
-      }
+    } else {
+      m_outPath.assign(File::ExtractFilePath(outFile));
+      m_outFile.assign(File::ExtractFileName(outFile));
     }
     return true;
   }
@@ -399,7 +388,7 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
     } else {
       if (assumeTis) {
         long size = f.getsize();
-        if ((size % 5120) == 0) {
+        if ((size % 0x1400) == 0) {
           return FileType::TIS;
         } else {
           return FileType::UNKNOWN;
@@ -414,41 +403,50 @@ FileType Options::GetFileType(const std::string &fileName, bool assumeTis) noexc
   return FileType::UNKNOWN;
 }
 
-
-std::string Options::SetFileExt(const std::string &fileName, FileType type) noexcept
+std::string Options::GetFileExt(FileType type) noexcept
 {
-  std::string retVal;
-  if (!fileName.empty() && type != FileType::UNKNOWN) {
-    uint32_t pos = fileName.find_last_of('.', fileName.size());
-    if (pos != std::string::npos) {
-      retVal.assign(fileName.substr(0, pos));
-    }
-    switch (type) {
-    case FileType::TIS:
-      retVal.append(".tis");
-      break;
-    case FileType::MOS:
-      retVal.append(".mos");
-      break;
-    case FileType::TBC:
-      retVal.append(".tbc");
-      break;
-    case FileType::MBC:
-      retVal.append(".mbc");
-      break;
-    case FileType::TIZ:
-      retVal.append(".tiz");
-      break;
-    case FileType::MOZ:
-      retVal.append(".moz");
-      break;
-    default:
-      break;
-    }
+  switch (type) {
+    case FileType::TIS: return std::string(".tis");
+    case FileType::MOS: return std::string(".mos");
+    case FileType::TBC: return std::string(".tbc");
+    case FileType::MBC: return std::string(".mbc");
+    case FileType::TIZ: return std::string(".tiz");
+    case FileType::MOZ: return std::string(".moz");
+    default:            return std::string();
   }
-  return retVal;
 }
 
+std::string Options::GetOutputFileName(const std::string &path, const std::string inputFile,
+                                       FileType type, bool overwrite) noexcept
+{
+  static const std::string defString;   // empty default string
+
+  if (!inputFile.empty() && type != FileType::UNKNOWN) {
+    std::string outFileBase, outFileExt, outPath;
+
+    // getting path
+    if (path.empty()) {
+      // using input file and path
+      outPath = File::ExtractFilePath(inputFile);
+    } else {
+      // using separate path with input file
+      outPath = path;
+    }
+
+    // getting filename
+    outFileBase = File::ExtractFileBase(inputFile);
+    outFileExt = GetFileExt(type);
+
+    // making output file unique if necessary
+    std::string output(File::CreateFileName(outPath, outFileBase + outFileExt));
+    for (int idx = 0; !overwrite && File::Exists(output); idx++) {
+      std::string suffix("-" +  std::to_string(idx));
+      output = File::CreateFileName(outPath, outFileBase + outFileExt + suffix);
+    }
+    return output;
+  }
+  return defString;
+}
 
 Encoding Options::GetEncodingType(int code) noexcept
 {
@@ -463,13 +461,10 @@ Encoding Options::GetEncodingType(int code) noexcept
   }
 }
 
-
-
 bool Options::IsTileDeflated(int code) noexcept
 {
   return (code & DEFLATE) == 0;
 }
-
 
 unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
 {
@@ -487,9 +482,6 @@ unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
     case Encoding::BC3:
       retVal |= ENCODE_DXT5;
       break;
-//    case Encoding::WEBP:
-//      retVal |= ENCODE_WEBP;
-//      break;
     case Encoding::Z:
       retVal |= ENCODE_Z;
       break;
@@ -500,7 +492,6 @@ unsigned Options::GetEncodingCode(Encoding type, bool deflate) noexcept
   return retVal;
 }
 
-
 const std::string& Options::GetEncodingName(int code) noexcept
 {
   static const std::string descUnk("Unknown (unknown)");
@@ -508,13 +499,11 @@ const std::string& Options::GetEncodingName(int code) noexcept
   static const std::string descDxt1Def("BC1/DXT1 (zlib-compressed)");
   static const std::string descDxt3Def("BC2/DXT3 (zlib-compressed)");
   static const std::string descDxt5Def("BC3/DXT5 (zlib-compressed)");
-//  static const std::string descWebPDef("WebP (zlib-compressed)");
   static const std::string descZ("JPEG compressed TIZ/MOZ");
   static const std::string descRaw("Not encoded (uncompressed)");
   static const std::string descDxt1("BC1/DXT1 (uncompressed)");
   static const std::string descDxt3("BC2/DXT3 (uncompressed)");
   static const std::string descDxt5("BC3/DXT5 (uncompressed)");
-//  static const std::string descWebP("WebP (uncompressed)");
 
   switch (code) {
     case ENCODE_RAW: return descRawDef;
@@ -530,7 +519,6 @@ const std::string& Options::GetEncodingName(int code) noexcept
     default: return descUnk;
   }
 }
-
 
 std::string Options::getOptionsSummary(bool complete) const noexcept
 {
