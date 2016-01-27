@@ -1,0 +1,100 @@
+WeiDU example
+~~~~~~~~~~~~~
+
+Let's assume the following mod folder structure:
+mymod/
+  setup-mymod.tp2
+  graphics/
+    mychap01.mbc
+    mychap02.mbc
+    mychap03.mbc
+    mychap04.mbc
+    myar01.tbc
+    myar02.tbc
+    myar03.tbc
+    bgee/
+      mychap05.mbc
+  lib/
+    a7_tools.tpa
+  tools/
+    tileconv/
+      osx/
+        tileconv
+      unix/
+        x86/
+          tileconv
+        x86_64/
+          tileconv
+      win32/
+        x86/
+          tileconv.exe
+        x86_64/
+          tileconv.exe
+
+
+This tp2 code snippet will decompress the packed graphics files into the 
+override folder of the game.
+
+------------------------------- snippet start -------------------------------
+
+INCLUDE ~mymod/lib/a7_tools.tpa~
+
+// Retrieve full path to tileconv binary
+// Note: Not needed if "tileconv" is using the default folder structure and 
+//       can be found in "%MOD_FOLDER%/tools/tileconv" as seen above.
+LAF GET_TOOL_BINARY
+  STR_VAR
+    tool_name = ~tileconv~
+  RET
+    tool_binary
+END
+
+// Decompress all files in "mymod/graphics" (4 MBC files and 3 TBC files)
+LAF HANDLE_TILECONV
+  INT_VAR
+    decode_mosc   = 1   // decompress MBC into compressed MOSC format
+  STR_VAR
+    input_path    = ~mymod/graphics~
+    // can be skipped if tileconv is located in default path (see above)
+    tileconv_path = EVAL ~%tool_binary%~
+    output_path   = ~override~
+  RET
+    num_converted
+END
+ACTION_IF (num_converted < 7) BEGIN
+  OUTER_SET skipped = 7 - num_converted
+  FAIL ~Error: Failed to decompress %skipped% out of 7 graphics files.~
+END
+
+// Decompress a single MBC file from "mymod/graphics/bgee"
+ACTION_IF (GAME_IS ~bgee~) BEGIN
+  LAF HANDLE_TILECONV
+    INT_VAR
+      decode_mosc   = 1   // decompress MBC into compressed MOSC format
+    STR_VAR
+      input_path    = ~mymod/graphics/bgee/mychap05.mbc~
+      // can be skipped if tileconv is located in default path (see above)
+      tileconv_path = EVAL ~%tool_binary%~
+      output_path   = ~override~
+    RET
+      num_converted
+  END
+  ACTION_IF (num_converted != 1) BEGIN
+    FAIL ~Error: Failed to decompress MBC file.~
+  END
+END
+
+------------------------------- snippet end -------------------------------
+
+After a successful decompression you should see the following files in the 
+override folder of the game:
+mychap01.mos
+mychap02.mos
+mychap03.mos
+mychap04.mos
+myar01.tis
+myar02.tis
+myar03.tis
+
+and an additional file in a BG:EE installation:
+mychap05.mos
