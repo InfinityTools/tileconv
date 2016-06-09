@@ -212,10 +212,16 @@ BEGIN
     OUTER_TEXT_SPRINT tool_binary ~%tool_os_64_path%/%tool_name%~
   END ELSE ACTION_IF (~%SYSTEM_ARCH%~ STRING_EQUAL_CASE ~x86~) BEGIN
     OUTER_TEXT_SPRINT tool_binary ~%tool_os_32_path%/%tool_name%~
-  END ELSE BEGIN
+  END
+
+  ACTION_IF (NOT FILE_EXISTS ~%tool_binary%~) BEGIN
     OUTER_TEXT_SPRINT tool_binary ~%tool_os_path%/%tool_name%~
   END
-  
+
+  ACTION_IF (NOT FILE_EXISTS ~%tool_binary%~) BEGIN
+    OUTER_TEXT_SPRINT tool_binary ~%tool_path%/%tool_name%~
+  END
+
   ACTION_IF (NOT FILE_EXISTS ~%tool_binary%~) BEGIN
     OUTER_TEXT_SPRINT tool_binary ~~
   END
