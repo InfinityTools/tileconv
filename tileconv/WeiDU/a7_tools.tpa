@@ -533,10 +533,10 @@ BEGIN
       END
       ACTION_IF (FILE_EXISTS ~%file%~) BEGIN
         OUTER_SET num_converted = num_converted + 1
-        COPY ~%file%~ ~%output_path%~
+        COPY_LARGE ~%file%~ ~%output_path%~
         DELETE + ~%file%~
         ACTION_BASH_FOR ~%folder%~ ~.+\.pvrz$~ BEGIN
-          COPY ~%BASH_FOR_FILESPEC%~ ~%output_path%~
+          COPY_LARGE ~%BASH_FOR_FILESPEC%~ ~%output_path%~
           DELETE + ~%BASH_FOR_FILESPEC%~
 
           // Updating pvrz start index for MOS V2 files
@@ -594,10 +594,10 @@ BEGIN
     END
     ACTION_IF (FILE_EXISTS ~%outfile%~) BEGIN
       OUTER_SET num_converted = num_converted + 1
-      COPY ~%outfile%~ ~%output_path%~
+      COPY_LARGE ~%outfile%~ ~%output_path%~
       DELETE + ~%outfile%~
       ACTION_BASH_FOR ~%folder%~ ~.+\.pvrz$~ BEGIN
-        COPY ~%BASH_FOR_FILESPEC%~ ~%output_path%~
+        COPY_LARGE ~%BASH_FOR_FILESPEC%~ ~%output_path%~
         DELETE + ~%BASH_FOR_FILESPEC%~
       END
     END ELSE BEGIN
