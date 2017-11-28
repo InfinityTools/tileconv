@@ -3,7 +3,7 @@
  * Note: Requires WeiDU v239 or later!                                                                 *
  *                                                                                                     *
  * Author: Argent77                                                                                    *
- * Version: 1.1                                                                                        *
+ * Version: 1.2                                                                                        *
  *******************************************************************************************************/
 
 /*
@@ -107,6 +107,9 @@
  *
  *
  * Changelog:
+ * v1.2:
+ * - Fixed a bug that could fail HANDLE_TILECONV and HANDLE_TILE2EE with large output files.
+ *
  * v1.1:
  * - Added support for converting single input file in HANDLE_TILECONV and HANDLE_TILE2EE.
  * - Removed action function REMOVE_DIRECTORY. WeiDU's DELETE action offers the same functionality (since v239).
@@ -388,7 +391,7 @@ BEGIN
         END
         ACTION_IF (FILE_EXISTS ~%bc_file%~) BEGIN
           OUTER_SET num_converted = num_converted + 1
-          COPY ~%bc_file%~ ~%output_path%~
+          COPY_LARGE ~%bc_file%~ ~%output_path%~
           DELETE + ~%bc_file%~
         END
         DELETE + ~%bc_folder%~
@@ -423,7 +426,7 @@ BEGIN
     END
     ACTION_IF (FILE_EXISTS ~%bc_file%~) BEGIN
       OUTER_SET num_converted = num_converted + 1
-      COPY ~%bc_file%~ ~%output_path%~
+      COPY_LARGE ~%bc_file%~ ~%output_path%~
       DELETE + ~%bc_file%~
     END
     DELETE + ~%bc_folder%~
